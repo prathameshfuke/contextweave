@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "ContextWeave",
+  "version": "0.1.0",
+  "description": "Capture AI chat context and clip web pages to your Obsidian vault",
+  "permissions": ["activeTab", "storage", "scripting", "tabs"],
+  "host_permissions": [
+    "http://localhost/*",
+    "https://claude.ai/*",
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icons/icon48.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ContextWeave</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <h1>ContextWeave</h1>
+    <button id="settings-toggle">⚙️</button>
+  </div>
+
+  <div id="settings-panel" class="hidden">
+    <div class="field">
+      <label>Obsidian API Key</label>
+      <input type="password" id="obsidian-api-key">
+    </div>
+    <div class="field">
+      <label>Obsidian Port</label>
+      <input type="text" id="obsidian-port" value="27123">
+    </div>
+    <div class="field">
+      <label>Ollama Model</label>
+      <input type="text" id="ollama-model" value="mistral">
+    </div>
+    <button id="save-settings" class="primary">Save Settings</button>
+  </div>
+
+  <div id="main-content">
+    <section class="project-selector">
+      <div class="row">
+        <label>Active Project:</label>
+        <select id="project-dropdown"></select>
+      </div>
+      <div id="new-project-container">
+        <button id="add-project-btn">+ New Project</button>
+        <input type="text" id="new-project-input" class="hidden" placeholder="slug-name">
+      </div>
+    </section>
+
+    <hr>
+
+    <section id="chat-capture-section" class="hidden">
+      <p>Platform: <span id="platform-name">-</span></p>
+      <p>Turns captured: <span id="turns-count">0</span></p>
+      <button id="capture-btn" class="primary">Capture & Compress</button>
+      <div class="row mt-10">
+        <button id="copy-md-btn" disabled>Copy MD</button>
+        <button id="save-vault-btn" disabled>Save to Vault</button>
+      </div>
+      <p class="status-msg mt-10">Last capture: <span id="last-capture-time">never</span></p>
+      <p class="status-msg">Tokens saved (est): <span id="token-estimate">-</span></p>
+    </section>
+
+    <section id="web-clipper-section" class="hidden">
+      <button id="clip-btn" class="primary">Clip this page</button>
+      <div class="row mt-10">
+        <label>Mode:</label>
+        <select id="clip-mode">
+          <option value="full">Full page</option>
+          <option value="selection">Selection</option>
+          <option value="summary">Summary only</option>
+        </select>
+      </div>
+      <p class="status-msg mt-10">Auto-tag to: <span id="tag-project-name">-</span></p>
+    </section>
+  </div>
+
+  <div id="spinner" class="spinner hidden"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

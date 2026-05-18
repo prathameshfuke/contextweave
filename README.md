@@ -193,11 +193,29 @@ The design of ContextWeave is informed by the following research:
 
 ---
 
-## 10. Getting Started
+## 10. Quick Start
 
-1.  **Vault Setup:** Open the `contextweave` folder in Obsidian.
-2.  **Enable Plugins:** Install and enable the **Local REST API** plugin in Obsidian.
-3.  **CLI Setup:** `uv run contextweave init` to configure your vault.
+To get ContextWeave running in 60 seconds:
+
+### Windows
+1. Double-click `setup.bat`.
+2. Run commands using: `uv run contextweave [command]`
+
+### macOS / Linux
+1. Run `chmod +x setup.sh && ./setup.sh`.
+2. Run commands using: `uv run contextweave [command]`
+
+### First Steps
+```bash
+# Start your first session
+cw session start my-project --agent claude --feature "ui-design"
+
+# Index your vault for AI search
+cw index my-project
+
+# Inject context into Claude/Gemini/Copilot
+cw inject my-project --all
+```
 
 ---
 *ContextWeave: Building a continuous intelligence layer for the modern developer.*
