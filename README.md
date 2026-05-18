@@ -1,4 +1,6 @@
-# <img src="./logo.png" width="48" height="48" alt="ContextWeave Logo"> ContextWeave: The Agentic Memory Layer
+![ContextWeave Banner](./assets/banner.png)
+
+# <img src="./assets/logo.png" width="48" height="48" alt="ContextWeave Logo"> ContextWeave: The Agentic Memory Layer
 
 > A local-first, model-agnostic context persistence layer for multi-agent AI workflows, anchored in an Obsidian vault and extended into the browser.
 
@@ -73,7 +75,10 @@ graph TD
 ```
 
 ### 3.1 Data Flow Visualization
-![Chat Context Transfer Flow](./chat_context_transfer_flow.svg)
+![Chat Context Transfer Flow](./assets/chat_context_transfer_flow.svg)
+
+### 3.2 System Design
+![System Design](./assets/systemdesign.png)
 
 ---
 
@@ -192,7 +197,7 @@ The design of ContextWeave is informed by the following research:
 
 1.  **Vault Setup:** Open the `contextweave` folder in Obsidian.
 2.  **Enable Plugins:** Install and enable the **Local REST API** plugin in Obsidian.
-3.  **CLI Setup:** (Coming Soon) `pip install contextweave`.
+3.  **CLI Setup:** `uv run contextweave init` to configure your vault.
 
 ---
 *ContextWeave: Building a continuous intelligence layer for the modern developer.*

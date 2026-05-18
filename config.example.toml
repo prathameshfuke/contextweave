@@ -1,0 +1,6 @@
+vault_path = "/Users/yourname/Documents/ObsidianVault"
+default_project = "my-project"
+ollama_model = "mistral"
+ollama_url = "http://localhost:11434"
+obsidian_api_key = "your_api_key_here"
+obsidian_port = 27123
