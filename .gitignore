@@ -3,7 +3,7 @@
 # Obsidian Vault (Local Knowledge Graph)
 # We exclude this because it contains local research, personal notes, 
 # and potentially sensitive project context that should stay on-machine.
-contextweave/
+/contextweave/
 
 # Python
 __pycache__/
