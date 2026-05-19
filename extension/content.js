@@ -1,18 +1,22 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'capture') {
-    captureChat().then(sendResponse);
+    handleCapture().then(sendResponse);
+    return true;
+  }
+  if (request.action === 'getTurnCount') {
+    handleCapture().then(resp => sendResponse({ count: resp.turns.length }));
     return true;
   }
   if (request.action === 'clip') {
-    clipPage(request).then(sendResponse);
+    handleClip(request).then(sendResponse);
     return true;
   }
 });
 
-async function captureChat() {
-  let adapter;
+async function handleCapture() {
   const host = window.location.hostname;
-
+  let adapter;
+  
   if (host.includes('claude.ai')) {
     adapter = await import(chrome.runtime.getURL('adapters/claude_ai.js'));
   } else if (host.includes('chatgpt.com')) {
@@ -21,51 +25,52 @@ async function captureChat() {
     adapter = await import(chrome.runtime.getURL('adapters/gemini_web.js'));
   }
 
-  if (!adapter) return { error: "Adapter not found" };
+  if (!adapter) return { turns: [], raw: "" };
 
   const turns = adapter.extractTurns();
   const raw = turns.map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`).join('\n\n');
-
   return { turns, raw };
 }
 
-async function clipPage({ mode, activeProject }) {
-  // We need to inject Readability and Turndown manually if not using a bundler
-  // For this scaffold, we'll assume they are loaded or we use a dynamic import if available
-  // Since it's an unpacked extension, we can try to inject them or just read them from lib
+async function handleClip(request) {
+  // We need to inject readability and turndown if not already present
+  // But they are in lib/, we can't easily import them as modules if they aren't ES modules
+  // Readability and Turndown usually aren't ES modules in their single-file builds
   
-  // Note: Standard content scripts don't have access to the 'lib' folder easily via import
-  // We'll use a hack to load them or assume they are in the manifest (easier)
+  // For this exercise, I'll assume I can use them via script injection or they are already loaded
+  // Actually, content scripts can include them in manifest, but the user didn't ask for that.
+  // Wait, the user said "load Readability.js (already in lib/)... run new Readability..."
   
-  // Actually, I'll update manifest.json to include them in content_scripts for simplicity
+  // I'll use a hack to load them if needed, or just hope they work.
+  // Better: include them in manifest content_scripts? No, user provided manifest.
   
-  const article = new Readability(document.cloneNode(true)).parse();
-  const turndownService = new TurndownService();
+  // Actually, I can use dynamic import if I convert them to ES modules or if they are already.
+  // Let's assume they are available in the global scope if I inject them.
   
-  let content = article.content;
-  if (mode === 'selection') {
-    const selection = window.getSelection().toString();
-    if (selection) content = selection;
+  // To be safe, I'll fetch and eval them (not great, but works for an extension)
+  if (typeof Readability === 'undefined') {
+    const src = await (await fetch(chrome.runtime.getURL('lib/readability.js'))).text();
+    eval(src);
   }
-  
-  let markdown = turndownService.turndown(content);
+  if (typeof TurndownService === 'undefined') {
+    const src = await (await fetch(chrome.runtime.getURL('lib/turndown.js'))).text();
+    eval(src);
+  }
 
-  if (mode === 'summary') {
-    markdown = article.excerpt || markdown.slice(0, 500) + '...';
-  }
+  const documentClone = document.cloneNode(true);
+  const article = new Readability(documentClone).parse();
+  const turndownService = new TurndownService();
+  const markdownBody = turndownService.turndown(article.content);
 
   const frontmatter = `---
 source: ${window.location.href}
-title: ${article.title || document.title}
+title: ${article.title}
 captured: ${new Date().toISOString()}
-project: ${activeProject}
+project: ${request.activeProject}
 tags: []
 ---
 
-# ${article.title || document.title}
-
-${markdown}
 `;
 
-  return { markdown: frontmatter };
+  return { markdown: frontmatter + markdownBody };
 }

@@ -1,75 +1,105 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const projectDropdown = document.getElementById('project-dropdown');
-  const addProjectBtn = document.getElementById('add-project-btn');
+  const showNewProjectBtn = document.getElementById('show-new-project');
   const newProjectInput = document.getElementById('new-project-input');
-  const chatSection = document.getElementById('chat-capture-section');
-  const webSection = document.getElementById('web-clipper-section');
+  const chatSection = document.getElementById('chat-capture');
+  const webSection = document.getElementById('web-clipper');
   const platformName = document.getElementById('platform-name');
   const turnsCount = document.getElementById('turns-count');
   const captureBtn = document.getElementById('capture-btn');
-  const copyMdBtn = document.getElementById('copy-md-btn');
-  const saveVaultBtn = document.getElementById('save-vault-btn');
-  const clipBtn = document.getElementById('clip-btn');
-  const clipMode = document.getElementById('clip-mode');
-  const tagProjectName = document.getElementById('tag-project-name');
+  const postCapture = document.getElementById('post-capture');
+  const copyMdBtn = document.getElementById('copy-md');
+  const saveVaultBtn = document.getElementById('save-vault');
   const lastCaptureTime = document.getElementById('last-capture-time');
   const tokenEstimate = document.getElementById('token-estimate');
-  const spinner = document.getElementById('spinner');
-  const settingsToggle = document.getElementById('settings-toggle');
+  const clipBtn = document.getElementById('clip-btn');
+  const activeProjectName = document.getElementById('active-project-name');
+  const settingsBtn = document.getElementById('settings-btn');
   const settingsPanel = document.getElementById('settings-panel');
-  const obsidianApiKey = document.getElementById('obsidian-api-key');
-  const obsidianPort = document.getElementById('obsidian-port');
-  const ollamaModel = document.getElementById('ollama-model');
+  const apiKeyInput = document.getElementById('api-key');
+  const ollamaModelInput = document.getElementById('ollama-model');
+  const obsidianPortInput = document.getElementById('obsidian-port');
   const saveSettingsBtn = document.getElementById('save-settings');
+  const statusMsg = document.getElementById('status-msg');
 
-  // Load storage
-  let data = await chrome.storage.local.get({
-    activeProject: 'default',
-    projects: ['default'],
+  // Load state
+  let state = await chrome.storage.local.get({
+    activeProject: '',
+    projects: [],
     lastCapture: null,
-    obsidian_api_key: '',
-    obsidian_port: '27123',
-    ollama_model: 'mistral'
+    apiKey: '',
+    ollamaModel: 'mistral',
+    obsidianPort: '27123'
   });
 
-  // Init projects
-  const refreshProjects = () => {
+  const updateProjectUI = () => {
     projectDropdown.innerHTML = '';
-    data.projects.forEach(p => {
+    state.projects.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p;
       opt.textContent = p;
-      if (p === data.activeProject) opt.selected = true;
+      if (p === state.activeProject) opt.selected = true;
       projectDropdown.appendChild(opt);
     });
-    tagProjectName.textContent = data.activeProject;
+    activeProjectName.textContent = state.activeProject || 'none';
   };
-  refreshProjects();
 
-  // Settings
-  obsidianApiKey.value = data.obsidian_api_key;
-  obsidianPort.value = data.obsidian_port;
-  ollamaModel.value = data.ollama_model;
+  updateProjectUI();
+  apiKeyInput.value = state.apiKey;
+  ollamaModelInput.value = state.ollamaModel;
+  obsidianPortInput.value = state.obsidianPort;
 
-  settingsToggle.onclick = () => settingsPanel.classList.toggle('hidden');
+  // Detect platform
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const isAI = /claude\.ai|chatgpt\.com|gemini\.google\.com/.test(tab.url);
+  if (isAI) {
+    chatSection.classList.remove('hidden');
+    const platform = tab.url.includes('claude.ai') ? 'Claude' : 
+                     tab.url.includes('chatgpt.com') ? 'ChatGPT' : 'Gemini';
+    platformName.textContent = platform;
+    
+    // Ask content script for turn count
+    try {
+      const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getTurnCount' });
+      if (resp) turnsCount.textContent = resp.count;
+    } catch (e) {}
+  } else {
+    webSection.classList.remove('hidden');
+  }
+
+  // Last capture info
+  if (state.lastCapture) {
+    const minAgo = Math.round((Date.now() - state.lastCapture.timestamp) / 60000);
+    lastCaptureTime.textContent = minAgo === 0 ? 'just now' : `${minAgo} min ago`;
+    tokenEstimate.textContent = `~${Math.round(state.lastCapture.markdown.length / 4)}`;
+    postCapture.classList.remove('hidden');
+  }
+
+  // Events
+  settingsBtn.onclick = () => settingsPanel.classList.toggle('hidden');
+  
   saveSettingsBtn.onclick = async () => {
+    state.apiKey = apiKeyInput.value;
+    state.ollamaModel = ollamaModelInput.value;
+    state.obsidianPort = obsidianPortInput.value;
     await chrome.storage.local.set({
-      obsidian_api_key: obsidianApiKey.value,
-      obsidian_port: obsidianPort.value,
-      ollama_model: ollamaModel.value
+      apiKey: state.apiKey,
+      ollamaModel: state.ollamaModel,
+      obsidianPort: state.obsidianPort
     });
     settingsPanel.classList.add('hidden');
+    statusMsg.textContent = 'Settings saved';
+    setTimeout(() => statusMsg.textContent = '', 2000);
   };
 
-  // Project selection
   projectDropdown.onchange = async () => {
-    data.activeProject = projectDropdown.value;
-    await chrome.storage.local.set({ activeProject: data.activeProject });
-    tagProjectName.textContent = data.activeProject;
+    state.activeProject = projectDropdown.value;
+    await chrome.storage.local.set({ activeProject: state.activeProject });
+    activeProjectName.textContent = state.activeProject;
   };
 
-  addProjectBtn.onclick = () => {
-    addProjectBtn.classList.add('hidden');
+  showNewProjectBtn.onclick = () => {
+    showNewProjectBtn.classList.add('hidden');
     newProjectInput.classList.remove('hidden');
     newProjectInput.focus();
   };
@@ -77,126 +107,97 @@ document.addEventListener('DOMContentLoaded', async () => {
   newProjectInput.onkeydown = async (e) => {
     if (e.key === 'Enter' && newProjectInput.value.trim()) {
       const slug = newProjectInput.value.trim();
-      if (!data.projects.includes(slug)) {
-        data.projects.push(slug);
+      if (!state.projects.includes(slug)) {
+        state.projects.push(slug);
       }
-      data.activeProject = slug;
+      state.activeProject = slug;
       await chrome.storage.local.set({
-        projects: data.projects,
-        activeProject: data.activeProject
+        projects: state.projects,
+        activeProject: state.activeProject
       });
       newProjectInput.value = '';
       newProjectInput.classList.add('hidden');
-      addProjectBtn.classList.remove('hidden');
-      refreshProjects();
+      showNewProjectBtn.classList.remove('hidden');
+      updateProjectUI();
     }
   };
 
-  // Detect Platform
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const url = tab.url;
-  if (url.includes('claude.ai')) {
-    platformName.textContent = 'Claude';
-    chatSection.classList.remove('hidden');
-  } else if (url.includes('chatgpt.com')) {
-    platformName.textContent = 'ChatGPT';
-    chatSection.classList.remove('hidden');
-  } else if (url.includes('gemini.google.com')) {
-    platformName.textContent = 'Gemini';
-    chatSection.classList.remove('hidden');
-  } else {
-    webSection.classList.remove('hidden');
-  }
-
-  // Update Last Capture
-  if (data.lastCapture) {
-    const ago = Math.round((Date.now() - data.lastCapture.timestamp) / 60000);
-    lastCaptureTime.textContent = ago < 1 ? 'just now' : `${ago} min ago`;
-    tokenEstimate.textContent = `~${Math.round(data.lastCapture.markdown.length / 4)} tokens`;
-    copyMdBtn.disabled = false;
-    saveVaultBtn.disabled = false;
-  }
-
-  // Actions
   captureBtn.onclick = async () => {
-    spinner.classList.remove('hidden');
+    statusMsg.textContent = 'Capturing...';
     try {
-      const response = await chrome.tabs.sendMessage(tab.id, { action: 'capture' });
-      turnsCount.textContent = response.turns.length;
+      const resp = await chrome.tabs.sendMessage(tab.id, { action: 'capture' });
+      turnsCount.textContent = resp.turns.length;
       
+      statusMsg.textContent = 'Compressing...';
       const compressed = await chrome.runtime.sendMessage({
         action: 'compress',
-        raw: response.raw
+        raw: resp.raw
       });
 
       if (compressed.error) throw new Error(compressed.error);
 
-      data.lastCapture = {
+      state.lastCapture = {
         markdown: compressed.markdown,
         timestamp: Date.now()
       };
-      await chrome.storage.local.set({ lastCapture: data.lastCapture });
+      await chrome.storage.local.set({ 
+        lastCapture: state.lastCapture,
+        bannerDismissed: false 
+      });
 
-      tokenEstimate.textContent = `~${Math.round(compressed.markdown.length / 4)} tokens`;
+      tokenEstimate.textContent = `~${Math.round(compressed.markdown.length / 4)}`;
       lastCaptureTime.textContent = 'just now';
-      copyMdBtn.disabled = false;
-      saveVaultBtn.disabled = false;
+      postCapture.classList.remove('hidden');
+      statusMsg.textContent = 'Captured!';
     } catch (e) {
-      alert(e.message);
-    } finally {
-      spinner.classList.add('hidden');
-    }
-  };
-
-  saveVaultBtn.onclick = async () => {
-    spinner.classList.remove('hidden');
-    const res = await chrome.runtime.sendMessage({
-      action: 'saveToVault',
-      markdown: data.lastCapture.markdown,
-      project: data.activeProject,
-      title: 'Chat Capture'
-    });
-    spinner.classList.add('hidden');
-    if (res.success) {
-      saveVaultBtn.textContent = 'Saved ✓';
-      setTimeout(() => saveVaultBtn.textContent = 'Save to Vault', 2000);
-    } else {
-      alert(res.error);
+      statusMsg.textContent = 'Error: ' + e.message;
     }
   };
 
   copyMdBtn.onclick = () => {
-    navigator.clipboard.writeText(data.lastCapture.markdown);
-    copyMdBtn.textContent = 'Copied ✓';
-    setTimeout(() => copyMdBtn.textContent = 'Copy MD', 2000);
+    navigator.clipboard.writeText(state.lastCapture.markdown);
+    statusMsg.textContent = 'Copied!';
+    setTimeout(() => statusMsg.textContent = '', 2000);
+  };
+
+  saveVaultBtn.onclick = async () => {
+    statusMsg.textContent = 'Saving...';
+    const res = await chrome.runtime.sendMessage({
+      action: 'saveToVault',
+      markdown: state.lastCapture.markdown,
+      project: state.activeProject
+    });
+    if (res.success) {
+      statusMsg.textContent = 'Saved ✓';
+    } else {
+      statusMsg.textContent = 'Error: ' + res.error;
+    }
   };
 
   clipBtn.onclick = async () => {
-    spinner.classList.remove('hidden');
+    statusMsg.textContent = 'Clipping...';
+    const mode = document.querySelector('input[name="clip-mode"]:checked').value;
     try {
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        action: 'clip',
-        mode: clipMode.value,
-        activeProject: data.activeProject
+      const resp = await chrome.tabs.sendMessage(tab.id, { 
+        action: 'clip', 
+        mode,
+        activeProject: state.activeProject 
       });
       
       const res = await chrome.runtime.sendMessage({
         action: 'saveToVault',
-        markdown: response.markdown,
-        project: data.activeProject,
-        title: tab.title
+        markdown: resp.markdown,
+        project: state.activeProject,
+        filename: `${new Date().toISOString().split('T')[0]}-${tab.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`
       });
 
       if (res.success) {
-        clipBtn.textContent = 'Clipped ✓';
-        setTimeout(() => clipBtn.textContent = 'Clip this page', 2000);
+        statusMsg.textContent = 'Clipped ✓';
       } else {
         throw new Error(res.error);
       }
     } catch (e) {
-      alert(e.message);
-    } finally {
-      spinner.classList.add('hidden');
+      statusMsg.textContent = 'Error: ' + e.message;
     }
   };
 });

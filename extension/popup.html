@@ -2,83 +2,82 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <title>ContextWeave</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="header">
-    <div class="logo-group">
-      <img src="icons/icon16.png" alt="logo">
-      <span>ContextWeave</span>
-    </div>
-    <button id="settings-toggle" class="icon-btn">⚙️</button>
-  </div>
+  <div class="container">
+    <header>
+      <h1>ContextWeave</h1>
+      <button id="settings-btn" title="Settings">⚙️</button>
+    </header>
 
-  <div id="settings-panel" class="panel hidden">
-    <h3>Settings</h3>
-    <div class="field">
-      <label>Obsidian API Key</label>
-      <input type="password" id="api-key" placeholder="Bearer ...">
-    </div>
-    <div class="field">
-      <label>Obsidian Port</label>
-      <input type="text" id="vault-port" value="27123">
-    </div>
-    <div class="field">
-      <label>Ollama Model</label>
-      <input type="text" id="ollama-model" value="mistral">
-    </div>
-    <button id="save-settings" class="primary-btn">Save Settings</button>
-  </div>
-
-  <div id="main-panel" class="panel">
-    <section id="project-section">
-      <div class="row">
-        <label>Active Project:</label>
-        <select id="project-select"></select>
+    <div id="settings-panel" class="hidden">
+      <h3>Settings</h3>
+      <div class="input-group">
+        <label>Obsidian API Key</label>
+        <input type="password" id="api-key" placeholder="Enter API Key">
       </div>
-      <div id="new-project-row" class="row">
-        <button id="add-project-btn" class="text-btn">+ New project</button>
+      <div class="input-group">
+        <label>Ollama Model</label>
+        <input type="text" id="ollama-model" value="mistral">
+      </div>
+      <div class="input-group">
+        <label>Obsidian Port</label>
+        <input type="text" id="obsidian-port" value="27123">
+      </div>
+      <button id="save-settings" class="primary">Save</button>
+      <hr>
+    </div>
+
+    <!-- Section 1: Project Selector -->
+    <section class="project-selector">
+      <div class="row">
+        <label>Active project:</label>
+        <select id="project-dropdown"></select>
+      </div>
+      <div id="new-project-container">
+        <button id="show-new-project">+ New project</button>
         <input type="text" id="new-project-input" class="hidden" placeholder="project-slug">
       </div>
     </section>
 
     <hr>
 
-    <section id="chat-section" class="hidden">
-      <div class="status-row">
-        <span>Platform: <b id="detected-platform">-</b></span>
-        <span>Turns: <b id="turn-count">0</b></span>
+    <!-- Section 2: Chat Capture -->
+    <section id="chat-capture" class="hidden">
+      <div class="detected-info">
+        <p>Platform detected: <span id="platform-name">...</span></p>
+        <p>Turns captured: <span id="turns-count">0</span></p>
       </div>
-      
-      <button id="capture-btn" class="primary-btn">Capture & Compress</button>
-      
-      <div id="capture-actions" class="row hidden">
-        <button id="copy-btn" class="secondary-btn">Copy MD</button>
-        <button id="save-btn" class="secondary-btn">Save to Vault</button>
+      <button id="capture-btn" class="primary">Capture & Compress</button>
+      <div id="post-capture" class="hidden row secondary-row">
+        <button id="copy-md">Copy MD</button>
+        <button id="save-vault">Save to Vault</button>
       </div>
-
-      <div id="capture-stats" class="stats hidden">
-        <div id="last-capture-time">Last capture: never</div>
-        <div id="token-estimate">Tokens saved: —</div>
+      <div class="stats">
+        <p>Last capture: <span id="last-capture-time">never</span></p>
+        <p>Tokens saved (est): <span id="token-estimate">—</span></p>
       </div>
     </section>
 
-    <section id="clipper-section" class="hidden">
+    <!-- Section 3: Web Clipper -->
+    <section id="web-clipper" class="hidden">
       <h3>Web Clipper</h3>
-      <div class="field">
+      <div class="input-group">
         <label>Mode:</label>
-        <select id="clip-mode">
-          <option value="full">Full page</option>
-          <option value="selection">Selection</option>
-          <option value="summary">Summary only</option>
-        </select>
+        <div class="radio-group">
+          <label><input type="radio" name="clip-mode" value="full" checked> Full page</label>
+          <label><input type="radio" name="clip-mode" value="selection"> Selection</label>
+          <label><input type="radio" name="clip-mode" value="summary"> Summary only</label>
+        </div>
       </div>
-      <button id="clip-btn" class="primary-btn">Clip this page</button>
+      <button id="clip-btn" class="primary">Clip this page</button>
+      <p class="hint">Auto-tag to: <span id="active-project-name">...</span></p>
     </section>
 
-    <div id="status-msg" class="status-msg"></div>
+    <div id="status-msg"></div>
   </div>
-
   <script src="popup.js" type="module"></script>
 </body>
 </html>
