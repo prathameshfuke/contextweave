@@ -2,60 +2,70 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>ContextWeave</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="header">
-    <h1>ContextWeave</h1>
-    <button id="settings-toggle">⚙️</button>
+    <div class="logo-group">
+      <img src="icons/icon16.png" alt="logo">
+      <span>ContextWeave</span>
+    </div>
+    <button id="settings-toggle" class="icon-btn">⚙️</button>
   </div>
 
-  <div id="settings-panel" class="hidden">
+  <div id="settings-panel" class="panel hidden">
+    <h3>Settings</h3>
     <div class="field">
       <label>Obsidian API Key</label>
-      <input type="password" id="obsidian-api-key">
+      <input type="password" id="api-key" placeholder="Bearer ...">
     </div>
     <div class="field">
       <label>Obsidian Port</label>
-      <input type="text" id="obsidian-port" value="27123">
+      <input type="text" id="vault-port" value="27123">
     </div>
     <div class="field">
       <label>Ollama Model</label>
       <input type="text" id="ollama-model" value="mistral">
     </div>
-    <button id="save-settings" class="primary">Save Settings</button>
+    <button id="save-settings" class="primary-btn">Save Settings</button>
   </div>
 
-  <div id="main-content">
-    <section class="project-selector">
+  <div id="main-panel" class="panel">
+    <section id="project-section">
       <div class="row">
         <label>Active Project:</label>
-        <select id="project-dropdown"></select>
+        <select id="project-select"></select>
       </div>
-      <div id="new-project-container">
-        <button id="add-project-btn">+ New Project</button>
-        <input type="text" id="new-project-input" class="hidden" placeholder="slug-name">
+      <div id="new-project-row" class="row">
+        <button id="add-project-btn" class="text-btn">+ New project</button>
+        <input type="text" id="new-project-input" class="hidden" placeholder="project-slug">
       </div>
     </section>
 
     <hr>
 
-    <section id="chat-capture-section" class="hidden">
-      <p>Platform: <span id="platform-name">-</span></p>
-      <p>Turns captured: <span id="turns-count">0</span></p>
-      <button id="capture-btn" class="primary">Capture & Compress</button>
-      <div class="row mt-10">
-        <button id="copy-md-btn" disabled>Copy MD</button>
-        <button id="save-vault-btn" disabled>Save to Vault</button>
+    <section id="chat-section" class="hidden">
+      <div class="status-row">
+        <span>Platform: <b id="detected-platform">-</b></span>
+        <span>Turns: <b id="turn-count">0</b></span>
       </div>
-      <p class="status-msg mt-10">Last capture: <span id="last-capture-time">never</span></p>
-      <p class="status-msg">Tokens saved (est): <span id="token-estimate">-</span></p>
+      
+      <button id="capture-btn" class="primary-btn">Capture & Compress</button>
+      
+      <div id="capture-actions" class="row hidden">
+        <button id="copy-btn" class="secondary-btn">Copy MD</button>
+        <button id="save-btn" class="secondary-btn">Save to Vault</button>
+      </div>
+
+      <div id="capture-stats" class="stats hidden">
+        <div id="last-capture-time">Last capture: never</div>
+        <div id="token-estimate">Tokens saved: —</div>
+      </div>
     </section>
 
-    <section id="web-clipper-section" class="hidden">
-      <button id="clip-btn" class="primary">Clip this page</button>
-      <div class="row mt-10">
+    <section id="clipper-section" class="hidden">
+      <h3>Web Clipper</h3>
+      <div class="field">
         <label>Mode:</label>
         <select id="clip-mode">
           <option value="full">Full page</option>
@@ -63,12 +73,12 @@
           <option value="summary">Summary only</option>
         </select>
       </div>
-      <p class="status-msg mt-10">Auto-tag to: <span id="tag-project-name">-</span></p>
+      <button id="clip-btn" class="primary-btn">Clip this page</button>
     </section>
+
+    <div id="status-msg" class="status-msg"></div>
   </div>
 
-  <div id="spinner" class="spinner hidden"></div>
-
-  <script src="popup.js"></script>
+  <script src="popup.js" type="module"></script>
 </body>
 </html>
