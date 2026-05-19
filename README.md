@@ -1,221 +1,108 @@
-![ContextWeave Banner](./assets/banner.png)
+# ContextWeave
+> AI context persistence for multi-model developer workflows
 
-# <img src="./assets/logo.png" width="48" height="48" alt="ContextWeave Logo"> ContextWeave: The Agentic Memory Layer
+ContextWeave solves the "context window amnesia" problem when working with AI coding assistants. Instead of repeatedly explaining your project, architectural decisions, and current state to different agents (Claude, ChatGPT, Gemini), ContextWeave captures, compresses, and injects your project's context automatically using a local Obsidian vault as a long-term knowledge graph.
 
-> A local-first, model-agnostic context persistence layer for multi-agent AI workflows, anchored in an Obsidian vault and extended into the browser.
+## What it does
+- **Continuous Memory**: Maintains an auto-updating graph of your project's decisions, handoffs, and in-progress tasks.
+- **Cross-Agent Handoffs**: Allows Claude to seamlessly pick up a task exactly where Gemini left off.
+- **Zero-Friction Injection**: Uses a Chrome extension to auto-inject the correct, compressed context into new AI chat sessions.
+- **Local First**: Your source code, architecture notes, and chat captures live entirely locally in your Obsidian vault.
+- **Semantic Retrieval**: Uses local vector search (ChromaDB + Ollama) to pull only the context relevant to your current feature.
 
-ContextWeave is a production-grade infrastructure layer designed to solve the "Amnesia Problem" in AI-assisted engineering. It provides a persistent knowledge graph that follows the developer across every model, session, and tool in their stack.
-
----
-
-## 1. Executive Summary
-
-Modern AI development is plagued by context fragmentation. Every new session with Claude, Gemini, or Copilot starts at zero knowledge. ContextWeave eliminates this "context tax" by treating memory as a structured knowledge graph stored in a local Obsidian vault. 
-
-By automating the flow of information between web research, agent sessions, and architectural decisions, ContextWeave ensures that AI agents function as continuous collaborators rather than transient assistants.
-
----
-
-## 2. Market Landscape and Differentiation
-
-### 2.1 Existing Solutions
-*   **MemGPT / MemOS:** Treat memory as an OS abstraction (paging/retrieval) but are often model-specific and lack local workflow integration.
-*   **Amazon Bedrock AgentCore:** Cloud-managed memory that creates vendor lock-in and lacks local-first privacy.
-*   **Obsilo / SystemSculpt:** Mature Obsidian-native AI tools that are vault-internal only and do not solve the cross-tool/cross-model sharing problem.
-*   **MCP (Model Context Protocol):** An integration standard. ContextWeave sits *on top* of MCP, using it as a delivery mechanism for the context stored in the vault.
-
-### 2.2 The ContextWeave Advantage
-ContextWeave is unique in its combination of:
-*   **Model-Agnosticism:** Works with any LLM via CLI or API.
-*   **Workflow Integration:** Connects the browser (research), the terminal (execution), and Obsidian (knowledge).
-*   **Human-Readable Memory:** Every "memory" is a Markdown file you can read, edit, and link manually.
-*   **Agent Handoffs:** Explicit protocol for agents to leave instructions for the next agent.
-
----
-
-## 3. System Architecture
-
-ContextWeave is organized into four distinct layers.
-
-```mermaid
-graph TD
-    subgraph Layer4[Layer 4: Browser Integration]
-        Clipper[ContextWeave Chrome Extension]
-        Summarizer[Project-Aware AI Summarizer]
-    end
-
-    subgraph Layer3[Layer 3: Knowledge Graph]
-        Vault[(Obsidian Vault)]
-        Templates[Standardized Templates]
-        GraphView[Obsidian Graph UI]
-        RestAPI[Local REST API Server]
-    end
-
-    subgraph Layer2[Layer 2: Context Engine]
-        Engine[Python Library: contextweave]
-        subgraph Modules
-            ProjectMgr[Project Registry]
-            SessionLifecycle[Session Lifecycle]
-            SemanticSearch[Hybrid Vector Search]
-            HandoffProtocol[Agent Handoff Logic]
-        end
-    end
-
-    subgraph Layer1[Layer 1: Agent Adapters]
-        ClaudeAdapter[Claude Code Adapter]
-        GeminiAdapter[Gemini CLI Adapter]
-        GenericAdapter[OpenAI/Custom API Adapter]
-    end
-
-    Clipper -->|Markdown + Frontmatter| Vault
-    Vault <-->|REST API + FS| Engine
-    Engine <-->|Prompt Injection| Layer1
-    Layer1 -->|Session Logs| Engine
-    Engine -->|Updates| Vault
-```
-
-### 3.1 Data Flow Visualization
-![Chat Context Transfer Flow](./assets/chat_context_transfer_flow.svg)
-
-### 3.2 System Design
-![System Design](./assets/systemdesign.png)
-
----
-
-## 4. The Knowledge Graph (Vault Structure)
-
-The Obsidian vault serves as both the database and the user interface.
+## How it works
+ContextWeave operates on a 4-layer architecture:
 
 ```text
-vault/
-├── projects/
-│   └── [project-slug]/
-│       ├── PROJECT.md              # Project dashboard and status
-│       ├── context/
-│       │   ├── architecture.md     # High-level system design
-│       │   ├── decisions.md        # Architecture Decision Records (ADR)
-│       │   ├── in-progress.md      # Active tasks and blockages
-│       │   └── gotchas.md          # Anti-patterns and lessons learned
-│       ├── sessions/
-│       │   ├── 2026-05-18-claude-auth.md
-│       │   └── 2026-05-19-gemini-db.md
-│       ├── web-captures/
-│       │   └── stripe-docs-auth.md
-│       └── agents/
-│           ├── handoff-notes.md    # Handoff queue
-│           ├── open-loops.md       # Cross-session questions
-│           └── identities/         # Agent-specific performance logs
-├── _templates/                     # Templates for consistency
-└── _index.md                       # Global project registry
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│                 │       │                 │       │                 │
+│  Obsidian Vault ├──────►│ ContextWeave CLI├──────►│ Chrome Ext      │
+│  (Local Data)   │◄──────┤ (Engine)        │◄──────┤ (Web Clipper)   │
+│                 │       │                 │       │                 │
+└────────┬────────┘       └────────┬────────┘       └────────┬────────┘
+         │                         │                         │
+         │                         ▼                         │
+         │                ┌─────────────────┐                │
+         └───────────────►│  AI Adapters    │◄───────────────┘
+                          │ (Claude/Gemini) │
+                          └─────────────────┘
 ```
 
----
+## Requirements
+- Python 3.11+
+- Ollama (free, local) with `mistral` or `llama3.2` model installed
+- Obsidian with the **Local REST API** plugin
+- Chrome or Chromium-based browser (for the extension)
 
-## 5. Core Components
-
-### 5.1 The Context Engine (`contextweave`)
-A Python-based library that manages the flow of context.
-*   **`contextweave.vault`**: Handles dual-path access (Local REST API + Direct File System).
-*   **`contextweave.retrieval`**: Implements tiered loading. Loads summaries and titles first to save tokens, fetching full content only when semantic relevance exceeds a threshold.
-*   **`contextweave.handoff`**: Manages the "relay race." It ensures that when you switch from Claude to Gemini, the new model receives a "last known state" summary.
-
-### 5.2 The Handoff Protocol
-A first-class Markdown schema that captures:
-*   **Task State:** What was being worked on when the session ended.
-*   **Logic Patterns:** Specific coding patterns established (e.g., "Use the wrapper in `src/lib/jwt.ts` instead of the raw library").
-*   **Unresolved Anomalies:** Strange behaviors or bugs discovered but not yet fixed.
-
-### 5.3 Chrome Extension (Clipper)
-Unlike generic clippers, the ContextWeave extension is **project-aware**.
-*   **Routing:** Detects active projects based on URL (e.g., your GitHub repo) and saves clips to the correct vault folder.
-*   **Summarization:** Uses the active project's architecture notes to summarize web pages relative to your current goals.
-
----
-
-## 6. Advanced Novel Features
-
-### 6.1 Agent Identity Cards
-Each model gets a profile in the vault tracking its strengths, weaknesses, and total sessions. This allows you to see at a glance which model is the "expert" on a particular feature.
-
-### 6.2 Context Budget Awareness
-Before starting a session, the engine calculates the token cost of the requested context and offers tiered modes:
-*   **Nano:** ~500 tokens (Last handoff + current status).
-*   **Micro:** ~2000 tokens (Nano + architecture summary).
-*   **Deep:** ~20000+ tokens (Full project history for long-context models).
-
-### 6.3 Daily Brief Generator
-Every morning, ContextWeave generates a summary of all AI work performed the previous day, highlighting open questions that require human intervention.
-
-### 6.4 Codebase Snapshotting
-Generates high-level Markdown descriptions of the directory structure and critical files using `tree-sitter`, allowing agents to orient themselves without expensive filesystem crawls.
-
----
-
-## 7. Development Roadmap
-
-### Phase 1: Core Foundation (Current)
-*   [x] Vault directory structure and templates.
-*   [ ] Vault file system interface (Python).
-*   [ ] Basic CLI for session initialization.
-*   [ ] Claude Code adapter (CLAUDE.md management).
-
-### Phase 2: Intelligence and Retrieval
-*   [ ] Local embedding engine (sentence-transformers).
-*   [ ] Tiered loading logic implementation.
-*   [ ] Hybrid (BM25 + Vector) search.
-
-### Phase 3: Integration
-*   [ ] Chrome Extension development.
-*   [ ] Gemini and Copilot adapters.
-*   [ ] Conflict resolution for multi-agent writes.
-
----
-
-## 8. Technical Stack
-
-| Component | Technology |
-|---|---|
-| Core Logic | Python 3.11+ |
-| Persistence | Markdown + YAML Frontmatter |
-| UI/Graph | Obsidian |
-| Embeddings | all-MiniLM-L6-v2 (Local) |
-| Code Parsing | tree-sitter |
-| Extension | Manifest V3 / TypeScript |
-
----
-
-## 9. Strategic Research Bibliography
-
-The design of ContextWeave is informed by the following research:
-1.  **Git Context Controller (GCC)** (arXiv 2508.00031): Applying COMMIT/BRANCH/MERGE concepts to agent memory.
-2.  **SAMEP Protocol** (arXiv 2507.10562): Standards for multi-agent memory sharing.
-3.  **Collaborative Memory** (arXiv 2505.18279): Tiered memory architectures (private vs. shared).
-
----
-
-## 10. Quick Start
-
-To get ContextWeave running in 60 seconds:
-
-### Windows
-1. Double-click `setup.bat`.
-2. Run commands using: `uv run contextweave [command]`
-
-### macOS / Linux
-1. Run `chmod +x setup.sh && ./setup.sh`.
-2. Run commands using: `uv run contextweave [command]`
-
-### First Steps
+## Install
 ```bash
-# Start your first session
-cw session start my-project --agent claude --feature "ui-design"
+git clone https://github.com/your-username/contextweave.git
+cd contextweave
+./scripts/install.sh
+```
+*Note: Make sure you configure your Obsidian vault and the Local REST API plugin according to `scripts/setup_obsidian.md` before using.*
 
-# Index your vault for AI search
-cw index my-project
+## Quickstart
+Go from zero to your first persistent session in 5 minutes:
 
-# Inject context into Claude/Gemini/Copilot
-cw inject my-project --all
+1. `contextweave doctor` (Ensure your system is ready)
+2. `contextweave init my-project` (Scaffolds the project in your vault)
+3. `contextweave watch my-project` (Start the auto-indexer in a separate terminal)
+4. `contextweave session start my-project --agent claude --feature "user auth"`
+5. `contextweave inject my-project --adapter claude` (Injects context into `CLAUDE.md`)
+6. When done, `contextweave session close my-project --summary "added JWT auth" --next "add login UI"`
+
+## Commands
+| Command | Description |
+|---|---|
+| `init <slug>` | Scaffolds a new project in your Obsidian vault. |
+| `status <slug>` | Shows current state, last session, and pending tasks. |
+| `watch [slug]` | Runs a file watcher to auto-index new vault notes. |
+| `brief <slug>` | Generates a daily brief summarizing recent AI work. |
+| `diff <slug>` | Shows the context delta between the last two sessions. |
+| `session start` | Begins a new AI tracking session. |
+| `session close` | Completes the session and generates a handoff note. |
+| `inject <slug>` | Injects context into specific AI system prompt files. |
+| `doctor` | Diagnoses your local setup (Ollama, Vault, API). |
+
+## Chrome Extension
+The included Chrome Extension brings ContextWeave directly into your browser workflow.
+1. Go to `chrome://extensions/`
+2. Enable **Developer Mode**.
+3. Click **Load unpacked** and select the `extension/` folder.
+
+**Features:**
+- **Capture Chat**: Automatically pulls chat transcripts from Claude, ChatGPT, or Gemini and compresses them using local Ollama.
+- **Web Clipper**: Save any documentation or web page directly to your active project in Obsidian.
+- **Auto-Injection**: Opening a new AI chat automatically drops a floating banner to inject your most recent context seamlessly.
+
+## Project vault structure
+Inside your selected Obsidian vault, ContextWeave maintains:
+```text
+projects/
+  └── my-project/
+      ├── context/
+      │   └── in-progress.md
+      ├── sessions/
+      │   └── 2026-05-19-claude-auth.md
+      ├── agents/
+      │   └── 2026-05-19-handoff.md
+      └── web-captures/
+          └── 2026-05-19-react-docs.md
 ```
 
----
-*ContextWeave: Building a continuous intelligence layer for the modern developer.*
+## Free stack
+ContextWeave is designed to operate with **zero API costs**.
+- **Vector Search**: Local `all-MiniLM-L6-v2` via `sentence-transformers` and `ChromaDB`.
+- **Summarization & Diffing**: Uses `Ollama` running `mistral` by default. Everything runs on your hardware, preserving your privacy and saving costs.
+
+## Contributing
+Contributions are welcome! Please ensure you include tests for any new CLI commands or adapters.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+MIT License
