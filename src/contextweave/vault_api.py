@@ -15,10 +15,12 @@ class VaultAPI:
         }
 
     def is_available(self) -> bool:
+        if not self.api_key:
+            return False
         try:
             response = requests.get(f"{self.base_url}/", timeout=2)
             return response.status_code == 200
-        except:
+        except requests.RequestException:
             return False
 
     def read_note(self, path: str) -> str:
@@ -29,7 +31,7 @@ class VaultAPI:
 
     def write_note(self, path: str, content: str) -> bool:
         url = f"{self.base_url}/vault/{path}"
-        response = requests.put(url, headers=self.headers, data=content.encode("utf-8"))
+        response = requests.put(url, headers=self.headers, data=content.encode("utf-8"), timeout=10)
         return response.status_code in [200, 204]
 
     def list_notes(self, folder: str) -> List[str]:

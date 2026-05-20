@@ -1,76 +1,159 @@
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'capture') {
-    handleCapture().then(sendResponse);
-    return true;
+const PAGE_READY_TIMEOUT_MS = 10000;
+
+function waitForDomReady() {
+  if (document.readyState !== 'loading') {
+    return Promise.resolve();
   }
-  if (request.action === 'getTurnCount') {
-    handleCapture().then(resp => sendResponse({ count: resp.turns.length }));
-    return true;
+
+  return new Promise((resolve) => {
+    document.addEventListener('DOMContentLoaded', () => resolve(), { once: true });
+  });
+}
+
+function waitForSelector(selector, timeoutMs = PAGE_READY_TIMEOUT_MS) {
+  if (document.querySelector(selector)) {
+    return Promise.resolve(document.querySelector(selector));
   }
-  if (request.action === 'clip') {
-    handleClip(request).then(sendResponse);
-    return true;
+
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const observer = new MutationObserver(() => {
+      const el = document.querySelector(selector);
+      if (el) {
+        observer.disconnect();
+        resolve(el);
+      } else if (Date.now() - started > timeoutMs) {
+        observer.disconnect();
+        reject(new Error(`Timed out waiting for ${selector}`));
+      }
+    });
+
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(() => {
+      observer.disconnect();
+      const el = document.querySelector(selector);
+      if (el) {
+        resolve(el);
+      } else {
+        reject(new Error(`Timed out waiting for ${selector}`));
+      }
+    }, timeoutMs);
+  });
+}
+
+function getAdapter() {
+  const host = window.location.hostname;
+  const adapters = globalThis.ContextWeaveAdapters || {};
+
+  if (host.includes('claude.ai')) {
+    return adapters.claude;
   }
-});
+  if (host.includes('chatgpt.com')) {
+    return adapters.chatgpt;
+  }
+  if (host.includes('gemini.google.com')) {
+    return adapters.gemini;
+  }
+  return null;
+}
+
+function getTurnSelector() {
+  const host = window.location.hostname;
+  if (host.includes('claude.ai')) {
+    return '[data-testid="user-message"], div[data-is-streaming], .font-claude-response';
+  }
+  if (host.includes('chatgpt.com')) {
+    return '[data-message-author-role]';
+  }
+  if (host.includes('gemini.google.com')) {
+    return 'user-query, model-response';
+  }
+  return '';
+}
+
+function getComposerSelector() {
+  const host = window.location.hostname;
+  if (host.includes('claude.ai')) {
+    return '[contenteditable="true"][role="textbox"], [contenteditable="true"]';
+  }
+  if (host.includes('chatgpt.com')) {
+    return '#prompt-textarea, textarea';
+  }
+  if (host.includes('gemini.google.com')) {
+    return 'textarea, [contenteditable="true"]';
+  }
+  return '';
+}
+
+function buildClipMarkdown(mode) {
+  const title = document.title.trim() || window.location.hostname;
+  const source = window.location.href;
+  const selection = window.getSelection()?.toString().trim() || '';
+  const bodyText = document.body ? document.body.innerText.trim() : '';
+
+  let content = bodyText;
+  if (mode === 'selection' && selection) {
+    content = selection;
+  } else if (mode === 'summary') {
+    content = selection || bodyText.slice(0, 4000);
+  }
+
+  return `---\nsource: ${source}\ntitle: ${title}\ncaptured: ${new Date().toISOString()}\n---\n\n# ${title}\n\n${content}`;
+}
 
 async function handleCapture() {
-  const host = window.location.hostname;
-  let adapter;
-  
-  if (host.includes('claude.ai')) {
-    adapter = await import(chrome.runtime.getURL('adapters/claude_ai.js'));
-  } else if (host.includes('chatgpt.com')) {
-    adapter = await import(chrome.runtime.getURL('adapters/chatgpt.js'));
-  } else if (host.includes('gemini.google.com')) {
-    adapter = await import(chrome.runtime.getURL('adapters/gemini_web.js'));
+  await waitForDomReady();
+  const adapter = getAdapter();
+  if (!adapter || typeof adapter.extractTurns !== 'function') {
+    return { turns: [], raw: '' };
   }
 
-  if (!adapter) return { turns: [], raw: "" };
+  const selector = getTurnSelector();
+  if (selector) {
+    try {
+      await waitForSelector(selector);
+    } catch (_) {
+      // Fall back to whatever is currently available.
+    }
+  }
 
-  const turns = adapter.extractTurns();
-  const raw = turns.map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`).join('\n\n');
+  const turns = adapter.extractTurns(document);
+  const raw = turns.map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`).join('\n\n');
   return { turns, raw };
 }
 
 async function handleClip(request) {
-  // We need to inject readability and turndown if not already present
-  // But they are in lib/, we can't easily import them as modules if they aren't ES modules
-  // Readability and Turndown usually aren't ES modules in their single-file builds
-  
-  // For this exercise, I'll assume I can use them via script injection or they are already loaded
-  // Actually, content scripts can include them in manifest, but the user didn't ask for that.
-  // Wait, the user said "load Readability.js (already in lib/)... run new Readability..."
-  
-  // I'll use a hack to load them if needed, or just hope they work.
-  // Better: include them in manifest content_scripts? No, user provided manifest.
-  
-  // Actually, I can use dynamic import if I convert them to ES modules or if they are already.
-  // Let's assume they are available in the global scope if I inject them.
-  
-  // To be safe, I'll fetch and eval them (not great, but works for an extension)
-  if (typeof Readability === 'undefined') {
-    const src = await (await fetch(chrome.runtime.getURL('lib/readability.js'))).text();
-    eval(src);
-  }
-  if (typeof TurndownService === 'undefined') {
-    const src = await (await fetch(chrome.runtime.getURL('lib/turndown.js'))).text();
-    eval(src);
+  await waitForDomReady();
+
+  if (request.mode === 'selection') {
+    const selected = window.getSelection()?.toString().trim();
+    if (selected) {
+      return { markdown: buildClipMarkdown('selection') };
+    }
   }
 
-  const documentClone = document.cloneNode(true);
-  const article = new Readability(documentClone).parse();
-  const turndownService = new TurndownService();
-  const markdownBody = turndownService.turndown(article.content);
-
-  const frontmatter = `---
-source: ${window.location.href}
-title: ${article.title}
-captured: ${new Date().toISOString()}
-project: ${request.activeProject}
-tags: []
----
-
-`;
-
-  return { markdown: frontmatter + markdownBody };
+  return { markdown: buildClipMarkdown(request.mode || 'full') };
 }
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'capture') {
+    handleCapture()
+      .then(sendResponse)
+      .catch((error) => sendResponse({ error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'getTurnCount') {
+    handleCapture()
+      .then((resp) => sendResponse({ count: resp.turns.length }))
+      .catch((error) => sendResponse({ count: 0, error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'clip') {
+    handleClip(request)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ error: error.message }));
+    return true;
+  }
+});

@@ -1,5 +1,7 @@
 import os
 import time
+import threading
+from datetime import datetime
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -7,7 +9,7 @@ from rich.console import Console
 
 from .config import load_config
 from .retrieval import Retrieval
-from .project import list_projects
+from .display import draw_watch_status, create_watch_live
 
 console = Console()
 
@@ -17,6 +19,13 @@ class VaultEventHandler(FileSystemEventHandler):
         self.retrieval = retrieval
         self.vault_path = Path(vault_path)
         self.target_project = target_project
+        self._lock = threading.Lock()
+        self._pending_updates = set()
+        self._debounce_timer = None
+        self._live = None
+        self._files_indexed = 0
+        self._last_indexed = "never"
+        self._last_note = ""
 
     def _get_project_and_rel_path(self, file_path: str):
         path = Path(file_path)
@@ -51,9 +60,27 @@ class VaultEventHandler(FileSystemEventHandler):
         if self.target_project and project_slug != self.target_project:
             return
 
-        time.sleep(2) # Debounce
-        self.retrieval.index_single_note(project_slug, note_rel_path)
-        console.print(f"[dim]↻ indexed: {note_rel_path}[/dim]")
+        with self._lock:
+            self._pending_updates.add((project_slug, note_rel_path))
+            if self._debounce_timer:
+                self._debounce_timer.cancel()
+            self._debounce_timer = threading.Timer(2.0, self._flush_pending_updates)
+            self._debounce_timer.daemon = True
+            self._debounce_timer.start()
+
+    def _flush_pending_updates(self):
+        with self._lock:
+            pending = list(self._pending_updates)
+            self._pending_updates.clear()
+            self._debounce_timer = None
+
+        for project_slug, note_rel_path in sorted(pending):
+            self.retrieval.index_single_note(project_slug, note_rel_path)
+            self._files_indexed += 1
+            self._last_indexed = datetime.now()
+            self._last_note = note_rel_path
+            if self._live:
+                self._live.update(draw_watch_status(self.target_project or "all projects", self._last_indexed, self._files_indexed, self._last_note))
 
     def _handle_delete(self, src_path: str):
         project_slug, note_rel_path = self._get_project_and_rel_path(src_path)
@@ -87,14 +114,16 @@ def start_watcher(project_slug: str | None = None):
 
     observer.schedule(event_handler, str(watch_dir), recursive=True)
     observer.start()
-    
-    target_msg = f"'{project_slug}'" if project_slug else "all projects"
-    console.print(f"[green]Watching vault ({target_msg}) for changes. Press Ctrl+C to stop.[/green]")
-    
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        observer.stop()
-        console.print("\n[yellow]Watcher stopped.[/yellow]")
+
+    target_msg = project_slug or "all projects"
+    initial = draw_watch_status(target_msg, "waiting", 0)
+    with create_watch_live(initial, console) as live:
+        event_handler._live = live
+        live.update(draw_watch_status(target_msg, "waiting", 0))
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            observer.stop()
+            console.print("\n[yellow]Watcher stopped.[/yellow]")
     observer.join()

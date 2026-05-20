@@ -5,7 +5,10 @@
   "description": "Capture AI chat context and clip web pages to your Obsidian vault",
   "permissions": ["activeTab", "storage", "scripting", "tabs"],
   "host_permissions": [
-    "http://localhost/*",
+    "http://localhost:11434/*",
+    "http://127.0.0.1:11434/*",
+    "http://localhost:27123/*",
+    "http://127.0.0.1:27123/*",
     "https://claude.ai/*",
     "https://chatgpt.com/*",
     "https://gemini.google.com/*"
@@ -18,7 +21,12 @@
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*", "https://chatgpt.com/*", "https://gemini.google.com/*"],
-      "js": ["content.js"],
+      "js": [
+        "adapters/claude_ai.js",
+        "adapters/chatgpt.js",
+        "adapters/gemini_web.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

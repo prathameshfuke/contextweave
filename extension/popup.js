@@ -22,6 +22,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveSettingsBtn = document.getElementById('save-settings');
   const statusMsg = document.getElementById('status-msg');
 
+  const setBusy = (busy, message) => {
+    captureBtn.disabled = busy;
+    clipBtn.disabled = busy;
+    copyMdBtn.disabled = busy;
+    saveVaultBtn.disabled = busy;
+    if (message) {
+      statusMsg.textContent = message;
+    }
+  };
+
+  const refreshTurnCount = async (tabId) => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const resp = await chrome.tabs.sendMessage(tabId, { action: 'getTurnCount' });
+        if (resp && typeof resp.count === 'number') {
+          turnsCount.textContent = resp.count;
+          return;
+        }
+      } catch (e) {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          continue;
+        }
+      }
+    }
+    turnsCount.textContent = '—';
+  };
+
   // Load state
   let state = await chrome.storage.local.get({
     activeProject: '',
@@ -59,10 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     platformName.textContent = platform;
     
     // Ask content script for turn count
-    try {
-      const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getTurnCount' });
-      if (resp) turnsCount.textContent = resp.count;
-    } catch (e) {}
+    await refreshTurnCount(tab.id);
   } else {
     webSection.classList.remove('hidden');
   }
@@ -123,7 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   captureBtn.onclick = async () => {
-    statusMsg.textContent = 'Capturing...';
+    setBusy(true, 'Capturing...');
     try {
       const resp = await chrome.tabs.sendMessage(tab.id, { action: 'capture' });
       turnsCount.textContent = resp.turns.length;
@@ -151,6 +176,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       statusMsg.textContent = 'Captured!';
     } catch (e) {
       statusMsg.textContent = 'Error: ' + e.message;
+    } finally {
+      captureBtn.disabled = false;
+      clipBtn.disabled = false;
+      copyMdBtn.disabled = false;
+      saveVaultBtn.disabled = false;
     }
   };
 
@@ -161,21 +191,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   saveVaultBtn.onclick = async () => {
-    statusMsg.textContent = 'Saving...';
-    const res = await chrome.runtime.sendMessage({
-      action: 'saveToVault',
-      markdown: state.lastCapture.markdown,
-      project: state.activeProject
-    });
-    if (res.success) {
-      statusMsg.textContent = 'Saved ✓';
-    } else {
-      statusMsg.textContent = 'Error: ' + res.error;
+    setBusy(true, 'Saving...');
+    try {
+      const res = await chrome.runtime.sendMessage({
+        action: 'saveToVault',
+        markdown: state.lastCapture.markdown,
+        project: state.activeProject
+      });
+      if (res.success) {
+        statusMsg.textContent = 'Saved ✓';
+      } else {
+        statusMsg.textContent = 'Error: ' + res.error;
+      }
+    } finally {
+      captureBtn.disabled = false;
+      clipBtn.disabled = false;
+      copyMdBtn.disabled = false;
+      saveVaultBtn.disabled = false;
     }
   };
 
   clipBtn.onclick = async () => {
-    statusMsg.textContent = 'Clipping...';
+    setBusy(true, 'Clipping...');
     const mode = document.querySelector('input[name="clip-mode"]:checked').value;
     try {
       const resp = await chrome.tabs.sendMessage(tab.id, { 
@@ -198,6 +235,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } catch (e) {
       statusMsg.textContent = 'Error: ' + e.message;
+    } finally {
+      captureBtn.disabled = false;
+      clipBtn.disabled = false;
+      copyMdBtn.disabled = false;
+      saveVaultBtn.disabled = false;
     }
   };
 });

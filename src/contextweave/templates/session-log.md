@@ -1,10 +1,10 @@
 ---
-project: {{project}}
-agent: {{agent}}
-feature: {{feature}}
+project: "{{project}}"
+agent: "{{agent}}"
+feature: "{{feature}}"
 status: in-progress
-started: {{started}}
-ended:
+started: "{{started}}"
+ended: ""
 tags: []
 ---
 

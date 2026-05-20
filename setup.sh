@@ -8,7 +8,6 @@ if ! command -v uv &> /dev/null
 then
     echo "[!] uv is not installed. Installing via pip..."
     pip install uv
- Kuy}
 fi
 
 # Sync dependencies and install the package
