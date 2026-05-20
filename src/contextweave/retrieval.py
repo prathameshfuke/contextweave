@@ -1,4 +1,6 @@
 import os
+import re
+import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
@@ -15,6 +17,53 @@ class Retrieval:
         self.chroma_path = Path.home() / ".contextweave" / "chroma"
         self._model = None
         self._client = None
+
+    def _collection_name(self, project_slug: str) -> str:
+        vault_key = str(Path(self.config["vault_path"]).expanduser().resolve())
+        digest = hashlib.sha1(f"{vault_key}:{project_slug}".encode("utf-8")).hexdigest()[:12]
+        slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", project_slug).strip("-").lower() or "project"
+        return f"cw-{slug}-{digest}"
+
+    def _chunk_content(self, content: str) -> List[str]:
+        text = content.strip()
+        if not text or "\n" not in text:
+            return []
+
+        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+        chunks: List[str] = []
+        for paragraph in paragraphs:
+            words = paragraph.split()
+            if not words:
+                continue
+            if len(words) <= 250:
+                chunks.append(paragraph)
+                continue
+            for start in range(0, len(words), 250):
+                chunk = " ".join(words[start:start + 250]).strip()
+                if chunk:
+                    chunks.append(chunk)
+        return chunks
+
+    def _should_skip_note(self, note_path: str) -> bool:
+        full_path = Path(self.config["vault_path"]).expanduser().resolve() / note_path
+        try:
+            if full_path.is_symlink():
+                return True
+            if full_path.stat().st_size > 500 * 1024:
+                return True
+        except OSError:
+            return True
+
+        if "sessions/" in note_path.replace("\\", "/"):
+            filename = Path(note_path).name
+            try:
+                date_part = "-".join(filename.split("-")[:3])
+                note_date = datetime.strptime(date_part, "%Y-%m-%d")
+                if note_date < datetime.now() - timedelta(days=30):
+                    return True
+            except Exception:
+                return False
+        return False
 
     def _get_model(self):
         if self._model is None:
@@ -40,39 +89,23 @@ class Retrieval:
         vault = Vault(self.config["vault_path"])
         project_folder = Path("projects") / project_slug
         notes = vault.list_notes(str(project_folder))
-        
-        # Filter sessions older than 30 days
-        filtered_notes = []
-        now = datetime.now()
-        thirty_days_ago = now - timedelta(days=30)
-
-        for note in notes:
-            if "sessions/" in note:
-                try:
-                    # Expecting YYYY-MM-DD-agent-feature.md
-                    filename = Path(note).name
-                    date_part = "-".join(filename.split("-")[:3])
-                    note_date = datetime.strptime(date_part, "%Y-%m-%d")
-                    if note_date < thirty_days_ago:
-                        continue
-                except:
-                    pass
-            filtered_notes.append(note)
+        filtered_notes = [note for note in notes if not self._should_skip_note(note)]
 
         client = self._get_client()
         model = self._get_model()
-        collection = client.get_or_create_collection(name=project_slug)
+        collection = client.get_or_create_collection(name=self._collection_name(project_slug))
 
         with Progress() as progress:
             task = progress.add_task(f"[cyan]Indexing {project_slug}...", total=len(filtered_notes))
+            indexed_notes = 0
             
             for note in filtered_notes:
                 try:
                     content = vault.read_note(note)
-                    # Simple chunking by words
-                    words = content.split()
-                    chunk_size = 300
-                    chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+                    chunks = self._chunk_content(content)
+                    if not chunks:
+                        progress.update(task, advance=1)
+                        continue
                     
                     ids = [f"{note}_{i}" for i in range(len(chunks))]
                     metadatas = [{"note_path": note} for _ in range(len(chunks))]
@@ -84,32 +117,22 @@ class Retrieval:
                         documents=chunks,
                         metadatas=metadatas
                     )
+                    indexed_notes += 1
                 except Exception as e:
                     console.print(f"[red]Error indexing {note}: {e}[/red]")
                 
                 progress.update(task, advance=1)
         
-        console.print(f"[green]Successfully indexed {len(filtered_notes)} notes for '{project_slug}'.[/green]")
+        console.print(f"[green]Successfully indexed {indexed_notes} notes for '{project_slug}'.[/green]")
 
     def index_single_note(self, project_slug: str, note_path: str):
         vault = Vault(self.config["vault_path"])
-        
-        if "sessions/" in note_path:
-            try:
-                filename = Path(note_path).name
-                date_part = "-".join(filename.split("-")[:3])
-                note_date = datetime.strptime(date_part, "%Y-%m-%d")
-                thirty_days_ago = datetime.now() - timedelta(days=30)
-                if note_date < thirty_days_ago:
-                    return
-            except:
-                pass
+        if self._should_skip_note(note_path):
+            return
 
         try:
             content = vault.read_note(note_path)
-            words = content.split()
-            chunk_size = 300
-            chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+            chunks = self._chunk_content(content)
 
             if not chunks:
                 return
@@ -119,7 +142,7 @@ class Retrieval:
             
             client = self._get_client()
             model = self._get_model()
-            collection = client.get_or_create_collection(name=project_slug)
+            collection = client.get_or_create_collection(name=self._collection_name(project_slug))
             
             embeddings = model.encode(chunks).tolist()
 
@@ -135,7 +158,7 @@ class Retrieval:
     def delete_note_from_index(self, project_slug: str, note_path: str):
         try:
             client = self._get_client()
-            collection = client.get_or_create_collection(name=project_slug)
+            collection = client.get_or_create_collection(name=self._collection_name(project_slug))
             collection.delete(where={"note_path": note_path})
         except Exception as e:
             console.print(f"[red]Error deleting {note_path} from index: {e}[/red]")
@@ -143,7 +166,7 @@ class Retrieval:
     def search(self, project_slug: str, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         client = self._get_client()
         model = self._get_model()
-        collection = client.get_or_create_collection(name=project_slug)
+        collection = client.get_or_create_collection(name=self._collection_name(project_slug))
         
         query_embedding = model.encode([query]).tolist()
         results = collection.query(
@@ -154,11 +177,13 @@ class Retrieval:
         formatted_results = []
         if results['documents']:
             for i in range(len(results['documents'][0])):
+                distance = results['distances'][0][i] if 'distances' in results else 0
                 formatted_results.append({
                     "note_path": results['metadatas'][0][i]['note_path'],
                     "excerpt": results['documents'][0][i],
-                    "score": results['distances'][0][i] if 'distances' in results else 0
+                    "score": round(1 / (1 + distance), 4)
                 })
+            formatted_results.sort(key=lambda item: item["score"], reverse=True)
         return formatted_results
 
     def build_context_prompt(self, project_slug: str, query: str, max_tokens: int = 3000) -> str:

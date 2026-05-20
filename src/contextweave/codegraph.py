@@ -19,9 +19,12 @@ class CodeGraph:
         by_extension = {}
         top_level_folders = set()
 
-        for current_root, dirs, files in os.walk(root):
+        for current_root, dirs, files in os.walk(root, followlinks=False):
             # Prune dirs
-            dirs[:] = [d for d in dirs if d not in skip_dirs]
+            dirs[:] = [
+                d for d in dirs
+                if d not in skip_dirs and not (Path(current_root) / d).is_symlink()
+            ]
             
             rel_root = Path(current_root).relative_to(root)
             if rel_root.parts:
@@ -30,6 +33,8 @@ class CodeGraph:
             for file in files:
                 file_path = Path(current_root) / file
                 try:
+                    if file_path.is_symlink():
+                        continue
                     stats = file_path.stat()
                     if stats.st_size > 500 * 1024:
                         continue

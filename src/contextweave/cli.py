@@ -1,12 +1,29 @@
 import click
+from datetime import datetime, timedelta
+import frontmatter
 from rich.console import Console
 from rich.table import Table
 from contextweave.config import load_config, save_config
 from contextweave.vault import Vault
 from contextweave.project import ProjectManager
 from contextweave.session import SessionManager, Session
+from contextweave.display import (
+    draw_projects_table,
+    draw_status_dashboard,
+    draw_doctor,
+    draw_brief_header,
+    draw_markdown,
+    draw_handoff_panel,
+)
 
 console = Console()
+
+def _raise_cli_error(error: Exception) -> None:
+    raise click.ClickException(str(error)) from error
+
+def _load_vault() -> Vault:
+    config = load_config()
+    return Vault(config["vault_path"])
 
 @click.group()
 def main():
@@ -18,14 +35,13 @@ def main():
 @click.option("--description", default="", help="Project description")
 def init(slug, description):
     """Initialize a new project in the vault."""
-    config = load_config()
     try:
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         pm = ProjectManager(vault)
         path = pm.init_project(slug, description)
         console.print(f"[green]Successfully initialized project '{slug}' at {path}[/green]")
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.group()
 def session():
@@ -38,14 +54,13 @@ def session():
 @click.option("--feature", required=True, help="Feature being worked on")
 def session_start(project_slug, agent, feature):
     """Start a new AI session."""
-    config = load_config()
     try:
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         sm = SessionManager(vault)
         sess = sm.start_session(project_slug, agent, feature)
         console.print(f"[green]Started session for '{project_slug}'. Log created at: {sess.file_path}[/green]")
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @session.command(name="close")
 @click.argument("project_slug")
@@ -53,9 +68,8 @@ def session_start(project_slug, agent, feature):
 @click.option("--next", "next_task", required=True, help="Next task to perform")
 def session_close(project_slug, summary, next_task):
     """Close the last open session for a project."""
-    config = load_config()
     try:
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         sm = SessionManager(vault)
         last_sess_data = sm.get_last_session(project_slug)
         
@@ -77,7 +91,7 @@ def session_close(project_slug, summary, next_task):
         sm.close_session(session, summary, next_task)
         console.print(f"[green]Session for '{project_slug}' closed successfully.[/green]")
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.group()
 def projects():
@@ -87,9 +101,8 @@ def projects():
 @projects.command(name="list")
 def projects_list():
     """List all projects in the vault."""
-    config = load_config()
     try:
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         pm = ProjectManager(vault)
         projects = pm.list_projects()
         
@@ -97,20 +110,17 @@ def projects_list():
             console.print("[yellow]No projects found in the vault.[/yellow]")
             return
 
-        table = Table(title="ContextWeave Projects")
-        table.add_column("Slug", style="cyan")
-        table.add_column("Description", style="magenta")
-        
+        rows = []
         for slug in projects:
             try:
                 meta = pm.get_project(slug)
-                table.add_row(slug, meta.get("description", ""))
-            except:
-                table.add_row(slug, "[red]Metadata missing[/red]")
-        
-        console.print(table)
+                rows.append((slug, meta.get("description", "")))
+            except Exception:
+                rows.append((slug, "Metadata missing"))
+
+        console.print(draw_projects_table(rows))
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 from .adapters import get_adapter, ADAPTERS
 from .handoff import HandoffManager
@@ -126,7 +136,7 @@ def index(project_slug):
         retrieval = Retrieval()
         retrieval.index_vault(project_slug)
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.command()
 @click.argument("project_slug")
@@ -136,9 +146,9 @@ def search(project_slug, query):
     try:
         retrieval = Retrieval()
         result = retrieval.build_context_prompt(project_slug, query)
-        console.print(Markdown(result))
+        console.print(draw_markdown(result))
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.group()
 def context():
@@ -150,8 +160,7 @@ def context():
 def context_show(project_slug):
     """Show the context that would be injected for the last session's feature."""
     try:
-        config = load_config()
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         sm = SessionManager(vault)
         last_sess = sm.get_last_session(project_slug)
         
@@ -164,9 +173,9 @@ def context_show(project_slug):
         
         retrieval = Retrieval()
         result = retrieval.build_context_prompt(project_slug, feature)
-        console.print(Markdown(result))
+        console.print(draw_markdown(result))
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.command()
 @click.argument("project_slug")
@@ -175,8 +184,7 @@ def context_show(project_slug):
 def inject(project_slug, adapter, all_adapters):
     """Inject context into AI agent files."""
     try:
-        config = load_config()
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         sm = SessionManager(vault)
         last_sess = sm.get_last_session(project_slug)
         
@@ -196,7 +204,7 @@ def inject(project_slug, adapter, all_adapters):
             table.add_column("Adapter", style="cyan")
             table.add_column("File Written", style="magenta")
             table.add_column("Status", style="green")
-            
+
             for name, adap in ADAPTERS.items():
                 try:
                     path = adap.inject(project_slug, context_block)
@@ -214,7 +222,7 @@ def inject(project_slug, adapter, all_adapters):
             console.print("[yellow]Please specify --adapter or --all[/yellow]")
             
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.group()
 def handoff():
@@ -226,8 +234,7 @@ def handoff():
 def handoff_show(project_slug):
     """Show the latest handoff for a project."""
     try:
-        config = load_config()
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         hm = HandoffManager(vault)
         handoff = hm.get_latest_handoff(project_slug)
         
@@ -235,16 +242,9 @@ def handoff_show(project_slug):
             console.print(f"[yellow]No handoff found for '{project_slug}'.[/yellow]")
             return
 
-        console.print(Panel(
-            f"[bold cyan]From Agent:[/bold cyan] {handoff.get('from_agent')}\n"
-            f"[bold cyan]Feature:[/bold cyan] {handoff.get('feature')}\n"
-            f"[bold cyan]Created:[/bold cyan] {handoff.get('created')}\n\n"
-            f"{handoff.get('body')}",
-            title="Latest Handoff",
-            border_style="green"
-        ))
+        console.print(draw_handoff_panel(handoff))
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.command()
 @click.argument("project_slug")
@@ -252,8 +252,7 @@ def handoff_show(project_slug):
 def snapshot(project_slug, root):
     """Generate a codebase structure snapshot."""
     try:
-        config = load_config()
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         cg = CodeGraph(vault)
         path = cg.write_snapshot(project_slug, root)
         
@@ -262,10 +261,9 @@ def snapshot(project_slug, root):
         content = vault.read_note(path)
         console.print("\n".join(content.splitlines()[:20]))
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 from .brief import generate_brief, brief_all_projects
-from .watcher import start_watcher
 from .diff import latest_diff
 from rich.panel import Panel
 import requests
@@ -281,26 +279,28 @@ def brief(project_slug, all_projects):
         if all_projects:
             results = brief_all_projects()
             for slug, md in results.items():
-                console.print(f"[bold cyan]=== {slug} ===[/bold cyan]")
-                console.print(Markdown(md))
+                console.print(draw_brief_header(slug))
+                console.print(draw_markdown(md))
                 console.print()
         elif project_slug:
             md = generate_brief(project_slug)
-            console.print(Markdown(md))
+            console.print(draw_brief_header(project_slug))
+            console.print(draw_markdown(md))
             console.print("[green]✓ Brief saved to vault.[/green]")
         else:
             console.print("[yellow]Provide a project slug or --all.[/yellow]")
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.command()
 @click.argument("project_slug", required=False)
 def watch(project_slug):
     """Start the file watcher to auto-sync ChromaDB."""
     try:
+        from .watcher import start_watcher
         start_watcher(project_slug)
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.command()
 @click.argument("project_slug")
@@ -308,17 +308,17 @@ def diff(project_slug):
     """Show the context diff between the last two sessions."""
     try:
         md = latest_diff(project_slug)
-        console.print(Markdown(md))
+        console.print(f"[bold magenta]Context diff[/bold magenta] — {project_slug}\n")
+        console.print(draw_markdown(md))
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.command()
 @click.argument("project_slug")
 def status(project_slug):
     """Show the current status of a project."""
     try:
-        config = load_config()
-        vault = Vault(config["vault_path"])
+        vault = _load_vault()
         sm = SessionManager(vault)
         hm = HandoffManager(vault)
         
@@ -338,18 +338,34 @@ def status(project_slug):
                     in_questions = True
                 elif line.startswith('## '):
                     in_questions = False
-                elif in_questions and line.startswith('- ') and not line.startswith('- [x]') and not line.startswith('- [X]'):
+                elif in_questions and line.startswith('- ') and '[x]' not in line.lower():
                     open_questions += 1
 
         # Check ChromaDB
         notes_indexed = 0
         try:
             from .retrieval import Retrieval
-            client = Retrieval()._get_client()
-            col = client.get_collection(name=project_slug)
+            retrieval = Retrieval()
+            client = retrieval._get_client()
+            col = client.get_collection(name=retrieval._collection_name(project_slug))
             notes_indexed = col.count()
-        except:
+        except Exception:
             pass
+
+        sessions_7d = 0
+        for note in session_notes:
+            try:
+                content = vault.read_note(note)
+                post = frontmatter.loads(content)
+                started = post.get("started")
+                if started:
+                    started_dt = datetime.fromisoformat(str(started).replace("Z", "+00:00"))
+                    if started_dt.tzinfo:
+                        started_dt = started_dt.replace(tzinfo=None)
+                    if started_dt > datetime.now() - timedelta(days=7):
+                        sessions_7d += 1
+            except Exception:
+                pass
 
         # Check Obsidian API
         obsidian_reachable = False
@@ -357,7 +373,7 @@ def status(project_slug):
             res = requests.get("http://127.0.0.1:27123/", timeout=1)
             if res.status_code in [200, 401, 403, 404]: # 401/403 means it's running but needs auth
                 obsidian_reachable = True
-        except:
+        except Exception:
             pass
 
         # Check Ollama
@@ -366,46 +382,42 @@ def status(project_slug):
             res = requests.get("http://127.0.0.1:11434/", timeout=1)
             if res.status_code == 200:
                 ollama_running = True
-        except:
+        except Exception:
             pass
 
         # Display
-        console.print(f"[bold cyan]Status: {project_slug}[/bold cyan]")
-        
-        t = Table(show_header=False, box=None)
-        if last_sess:
-            t.add_row("Last Session:", f"{last_sess.get('agent', '?')} working on [green]{last_sess.get('feature', '?')}[/green]")
-            t.add_row("Status:", last_sess.get('status', '?'))
-            t.add_row("Started:", last_sess.get('started', '?'))
-        else:
-            t.add_row("Last Session:", "None")
-
-        next_step = handoff.get("next_step", "None") if handoff else "None"
-        t.add_row("Next Step:", f"[bold magenta]{next_step}[/bold magenta]")
-        t.add_row("Open Questions:", str(open_questions))
-        t.add_row("Notes Indexed:", str(notes_indexed))
-        t.add_row("Obsidian API:", "[green]✓[/green]" if obsidian_reachable else "[red]✗[/red]")
-        t.add_row("Ollama:", "[green]✓[/green]" if ollama_running else "[red]✗[/red]")
-        
-        console.print(Panel(t, border_style="blue"))
+        console.print(draw_status_dashboard(
+            project_slug,
+            last_sess,
+            handoff,
+            open_questions,
+            notes_indexed,
+            sessions_7d,
+            len(vault.list_notes(f"projects/{project_slug}/web-captures")),
+            obsidian_reachable,
+            ollama_running,
+        ))
 
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        _raise_cli_error(e)
 
 @main.command()
 def doctor():
     """Diagnoses the full setup."""
-    console.print("[bold cyan]ContextWeave Doctor[/bold cyan]\n")
-    config = load_config()
+    try:
+        config = load_config()
+    except Exception as e:
+        _raise_cli_error(e)
     
     issues = []
     
     # Vault Path
     vault_path = config.get("vault_path")
+    checks = []
     if vault_path and os.path.exists(vault_path):
-        console.print("[green]✓[/green] Vault path exists on disk")
+        checks.append((True, "Vault path exists", vault_path, "ok"))
     else:
-        console.print("[red]✗[/red] Vault path does not exist")
+        checks.append((False, "Vault path exists", str(vault_path), "missing"))
         issues.append("Vault path not found. Run: [cyan]contextweave init[/cyan] or edit ~/.contextweave/config.toml")
         
     # Obsidian API
@@ -414,56 +426,63 @@ def doctor():
         res = requests.get("http://127.0.0.1:27123/", timeout=2)
         if res.status_code in [200, 401, 403, 404]: 
             obsidian_reachable = True
-    except:
+    except Exception:
         pass
     
     if obsidian_reachable:
-        console.print("[green]✓[/green] Obsidian Local REST API reachable")
+        checks.append((True, "Obsidian REST API", "localhost:27123", "online"))
     else:
-        console.print("[red]✗[/red] Obsidian Local REST API not reachable")
+        checks.append((False, "Obsidian REST API", "localhost:27123", "offline"))
         issues.append("Obsidian API not found. Install 'Local REST API' plugin in Obsidian and set port to 27123.")
         
     # Ollama
     ollama_running = False
     model_pulled = False
+    model_name = config.get("ollama_model", "mistral")
     try:
         res = requests.get("http://127.0.0.1:11434/api/tags", timeout=2)
         if res.status_code == 200:
             ollama_running = True
             data = res.json()
             models = [m["name"] for m in data.get("models", [])]
-            if "mistral:latest" in models or "mistral" in models:
+            if model_name in models or f"{model_name}:latest" in models:
                 model_pulled = True
-    except:
+    except Exception:
         pass
         
     if ollama_running:
-        console.print("[green]✓[/green] Ollama running")
+        checks.append((True, "Ollama running", "localhost:11434", "online"))
         if model_pulled:
-            console.print("[green]✓[/green] Ollama mistral model pulled")
+            checks.append((True, "Model pulled", model_name, "ready"))
         else:
-            console.print("[red]✗[/red] Ollama mistral model not pulled")
-            issues.append("Ollama mistral model not found. Run: [cyan]ollama pull mistral[/cyan]")
+            checks.append((False, "Model pulled", model_name, "missing"))
+            issues.append(f"Ollama {model_name} model not found. Run: [cyan]ollama pull {model_name}[/cyan]")
     else:
-        console.print("[red]✗[/red] Ollama running")
+        checks.append((False, "Ollama running", "localhost:11434", "offline"))
         issues.append("Ollama not running. Install from ollama.com and run: [cyan]OLLAMA_ORIGINS=* ollama serve[/cyan]")
         
     # ChromaDB
     chroma_path = Path.home() / ".contextweave" / "chroma"
-    if chroma_path.exists():
-        console.print("[green]✓[/green] ChromaDB folder exists")
+    has_chroma_data = chroma_path.exists() and any(chroma_path.iterdir())
+    if has_chroma_data:
+        checks.append((True, "ChromaDB has data", str(chroma_path), "ready"))
     else:
-        console.print("[red]✗[/red] ChromaDB folder does not exist")
+        checks.append((False, "ChromaDB has data", str(chroma_path), "empty"))
         issues.append("ChromaDB not initialized. Start a session or run index.")
         
     # Projects
-    pm = ProjectManager(Vault(vault_path)) if vault_path else None
+    try:
+        pm = ProjectManager(Vault(vault_path)) if vault_path else None
+    except Exception as e:
+        pm = None
+        issues.append(str(e))
     if pm and pm.list_projects():
-        console.print("[green]✓[/green] At least one project exists")
+        checks.append((True, "Projects exist", "vault/projects", "ready"))
     else:
-        console.print("[red]✗[/red] At least one project exists")
+        checks.append((False, "Projects exist", "vault/projects", "missing"))
         issues.append("No projects found. Run: [cyan]contextweave init <project-slug>[/cyan]")
-        
+
+    console.print(draw_doctor(checks, len([check for check in checks if check[0]]), len(checks)))
     if issues:
         console.print("\n[bold yellow]Fix the following issues:[/bold yellow]")
         for i, issue in enumerate(issues, 1):

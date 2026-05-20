@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 import frontmatter
 from .vault import Vault
+from .config import load_config
 
 class ProjectManager:
     def __init__(self, vault: Vault):
@@ -65,3 +66,8 @@ class ProjectManager:
         if not projects_dir.exists():
             return []
         return [d.name for d in projects_dir.iterdir() if d.is_dir()]
+
+def list_projects() -> List[str]:
+    config = load_config()
+    vault = Vault(config["vault_path"])
+    return ProjectManager(vault).list_projects()

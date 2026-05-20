@@ -5,9 +5,16 @@ from pathlib import Path
 from .vault import Vault
 from .handoff import HandoffManager, Session
 from rich.console import Console
-from rich.panel import Panel
+from .display import draw_handoff_panel
 
 console = Console()
+
+def _metadata_timestamp(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
 
 class SessionManager:
     def __init__(self, vault: Vault):
@@ -24,27 +31,26 @@ class SessionManager:
         # Check for latest handoff
         latest_handoff = self.handoff_mgr.get_latest_handoff(project_slug)
         if latest_handoff:
-            console.print(Panel(
-                f"[bold cyan]Previous Agent:[/bold cyan] {latest_handoff.get('from_agent')}\n"
-                f"[bold cyan]Feature:[/bold cyan] {latest_handoff.get('feature')}\n"
-                f"[bold yellow]Exact Next Step:[/bold yellow] {latest_handoff.get('next_task', 'Check latest-handoff.md')}",
-                title="Context Transfer Waiting",
-                border_style="yellow"
-            ))
-        else:
-            console.print("[blue]No previous handoff found for this project.[/blue]")
+            console.print(draw_handoff_panel(latest_handoff))
 
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        started = datetime.now()
+        date_str = started.strftime("%Y-%m-%d")
         session_filename = f"{date_str}-{agent}-{feature}.md"
         relative_path = Path("projects") / project_slug / "sessions" / session_filename
         
         template_content = self._load_template("session-log")
-        
-        # Simple template replacement
-        content = template_content.replace("{{project}}", project_slug)
-        content = content.replace("{{agent}}", agent)
-        content = content.replace("{{feature}}", feature)
-        content = content.replace("{{started}}", datetime.now().isoformat())
+        post = frontmatter.loads(template_content)
+        post.metadata.update({
+            "project": project_slug,
+            "agent": agent,
+            "feature": feature,
+            "status": "in-progress",
+            "started": started.isoformat(),
+            "ended": "",
+            "tags": [],
+        })
+        post.content = post.content.replace("{{feature}}", feature)
+        content = frontmatter.dumps(post)
         
         self.vault.write_note(str(relative_path), content)
         return Session(project_slug, agent, feature, str(relative_path))
@@ -55,6 +61,8 @@ class SessionManager:
         
         post.metadata["status"] = "completed"
         post.metadata["ended"] = datetime.now().isoformat()
+        post.metadata["started"] = _metadata_timestamp(post.metadata.get("started"))
+        post.metadata["ended"] = _metadata_timestamp(post.metadata.get("ended"))
         
         # Append summary and next task to the end of the markdown
         new_content = post.content
@@ -75,12 +83,25 @@ class SessionManager:
         if not session_notes:
             return None
         
-        # Sort by filename (which starts with date)
-        session_notes.sort(reverse=True)
-        last_session_path = session_notes[0]
-        
-        content = self.vault.read_note(last_session_path)
-        post = frontmatter.loads(content)
+        parsed_sessions = []
+        for note_path in session_notes:
+            try:
+                content = self.vault.read_note(note_path)
+                post = frontmatter.loads(content)
+                started = post.get("started")
+                if started:
+                    started_dt = datetime.fromisoformat(str(started).replace("Z", "+00:00"))
+                    if started_dt.tzinfo:
+                        started_dt = started_dt.replace(tzinfo=None)
+                    parsed_sessions.append((started_dt, note_path, post))
+            except Exception:
+                continue
+
+        if not parsed_sessions:
+            return None
+
+        parsed_sessions.sort(key=lambda item: item[0], reverse=True)
+        _, last_session_path, post = parsed_sessions[0]
         
         result = dict(post.metadata)
         result["content"] = post.content

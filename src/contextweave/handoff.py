@@ -31,23 +31,32 @@ class HandoffManager:
         compressed_content = self.llm.compress_chat([{"role": "assistant", "content": session_content}])
         
         template_content = self._load_template("handoff")
-        
-        # Fill template
-        content = template_content.replace("{{from_agent}}", session.agent)
-        content = content.replace("{{project}}", session.project_slug)
-        content = content.replace("{{feature}}", session.feature)
-        content = content.replace("{{created}}", datetime.now().isoformat())
-        content = content.replace("{{summary}}", summary)
-        content = content.replace("{{next_task}}", next_task)
+        created = datetime.now().isoformat()
+        post = frontmatter.loads(template_content)
+        post.metadata.update({
+            "from_agent": session.agent,
+            "to_agent": "any",
+            "project": session.project_slug,
+            "feature": session.feature,
+            "created": created,
+            "next_task": next_task,
+        })
+        post.content = post.content.replace("{{feature}}", session.feature)
+        post.content = post.content.replace("{{summary}}", summary)
+        post.content = post.content.replace("{{next_task}}", next_task)
+        content = frontmatter.dumps(post)
         content += f"\n\n## LLM Compressed Insights\n{compressed_content}\n"
         
-        # Write to handoff-notes.md (append)
+        # Write to handoff-notes.md (append without clobbering prior handoffs)
         handoff_notes_path = Path("projects") / session.project_slug / "agents" / "handoff-notes.md"
         existing_notes = ""
         if self.vault.note_exists(str(handoff_notes_path)):
             existing_notes = self.vault.read_note(str(handoff_notes_path))
         
-        new_notes = existing_notes + "\n---\n" + content
+        if existing_notes.strip():
+            new_notes = existing_notes.rstrip() + "\n\n---\n\n" + content
+        else:
+            new_notes = content
         self.vault.write_note(str(handoff_notes_path), new_notes)
         
         # Write to latest-handoff.md (overwrite)
@@ -61,8 +70,11 @@ class HandoffManager:
         if not self.vault.note_exists(str(latest_handoff_path)):
             return None
         
-        content = self.vault.read_note(str(latest_handoff_path))
-        post = frontmatter.loads(content)
+        try:
+            content = self.vault.read_note(str(latest_handoff_path))
+            post = frontmatter.loads(content)
+        except Exception:
+            return None
         
         result = dict(post.metadata)
         result["body"] = post.content

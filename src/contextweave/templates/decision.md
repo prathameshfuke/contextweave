@@ -1,7 +1,7 @@
 ---
-project: {{project}}
-agent: {{agent}}
-date: {{date}}
+project: "{{project}}"
+agent: "{{agent}}"
+date: "{{date}}"
 ---
 
 # Decision: {{title}}

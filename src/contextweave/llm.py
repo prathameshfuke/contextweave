@@ -1,5 +1,5 @@
 import requests
-from typing import List, Dict, Any
+from typing import List, Dict
 from rich.console import Console
 from .config import load_config
 
@@ -22,7 +22,8 @@ class LLM:
             }
             response = requests.post(url, json=payload, timeout=60)
             response.raise_for_status()
-            return response.json().get("response", "")
+            data = response.json()
+            return data.get("response", "")
         except requests.exceptions.RequestException:
             console.print("[red]Ollama is not running. Start it with: ollama serve[/red]")
             return ""
@@ -33,20 +34,30 @@ class LLM:
         return self.generate(prompt, system)
 
     def compress_chat(self, raw_turns: List[Dict[str, str]]) -> str:
-        transcript = ""
-        for turn in raw_turns:
-            role = turn.get("role", "unknown")
-            content = turn.get("content", "")
-            transcript += f"{role.upper()}: {content}\n\n"
+        transcript = []
+        for index, turn in enumerate(raw_turns, 1):
+            role = turn.get("role", "unknown").strip().title()
+            content = turn.get("content", "").strip()
+            if not content:
+                continue
+            transcript.append(f"### Turn {index} — {role}\n{content}")
 
-        instruction = """Convert this AI chat into a structured handoff document another AI can read to continue the work.
-Include:
-- Project/task being worked on (2 sentences max)
-- Key decisions made (bullet list with reasoning)
-- Current state: what is done, what is in progress
-- Critical constraints or patterns to follow
-- Exact next step (be specific, mention file names)
-- Open questions
-Output as markdown with these exact headers. Be ruthlessly concise."""
-        
-        return self.summarise(transcript, instruction)
+        instruction = """Convert this AI chat into a structured handoff another AI can continue from.
+Use these exact markdown headers:
+## Project / Task
+## Key Decisions
+## Current State
+## Critical Constraints
+## Exact Next Step
+## Open Questions
+
+Rules:
+- Be concise and specific.
+- Mention file names and concrete next actions when present.
+- Use bullet points under sections where helpful.
+- Do not add any prose outside the required headers."""
+
+        return self.summarise("\n\n".join(transcript), instruction)
+
+def summarise(text: str, instruction: str) -> str:
+    return LLM().summarise(text, instruction)

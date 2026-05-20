@@ -1,10 +1,12 @@
-export function extractTurns() {
-  const ordered = [];
-  document.querySelectorAll('[data-message-author-role]').forEach(el => {
-    ordered.push({
-      role: el.dataset.messageAuthorRole,
-      content: el.innerText.trim()
-    });
-  });
-  return ordered;
-}
+(function registerChatGPTAdapter(global) {
+  const registry = global.ContextWeaveAdapters || (global.ContextWeaveAdapters = {});
+
+  registry.chatgpt = {
+    extractTurns(root = document) {
+      return Array.from(root.querySelectorAll('[data-message-author-role]')).map((el) => ({
+        role: el.dataset.messageAuthorRole === 'user' ? 'user' : 'assistant',
+        content: el.innerText.trim()
+      }));
+    }
+  };
+})(globalThis);

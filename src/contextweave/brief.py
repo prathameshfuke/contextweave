@@ -1,5 +1,3 @@
-import os
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
 import frontmatter
@@ -57,9 +55,9 @@ def generate_brief(project_slug: str) -> str:
         if feature:
             features_touched.add(feature)
             
-        # Parse Open Questions
+        # Parse Open Questions from the session body only.
         in_open_questions = False
-        for line in content.split('\n'):
+        for line in post.content.split('\n'):
             line = line.strip()
             if line.startswith('## Open Questions'):
                 in_open_questions = True
@@ -68,7 +66,7 @@ def generate_brief(project_slug: str) -> str:
                 in_open_questions = False
                 continue
             
-            if in_open_questions and line.startswith('- ') and not line.startswith('- [x]') and not line.startswith('- [X]'):
+            if in_open_questions and line.startswith('- ') and '[x]' not in line.lower():
                 open_questions.append(line[2:])
                 
     # Handoff stats
@@ -81,14 +79,14 @@ def generate_brief(project_slug: str) -> str:
         handoff_notes.sort(reverse=True)
         latest_handoff_content = vault.read_note(handoff_notes[0])
         post = frontmatter.loads(latest_handoff_content)
-        latest_handoff_step = post.get("next_step", "None")
+        latest_handoff_step = post.get("next_task", "None")
         
     # In progress
     in_progress_content = ""
     in_progress_path = f"{context_dir}/in-progress.md"
     try:
         in_progress_content = vault.read_note(in_progress_path)
-    except:
+    except Exception:
         pass
         
     # Web captures

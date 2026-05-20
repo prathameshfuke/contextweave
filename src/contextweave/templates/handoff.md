@@ -1,9 +1,10 @@
 ---
-from_agent: {{from_agent}}
+from_agent: "{{from_agent}}"
 to_agent: any
-project: {{project}}
-feature: {{feature}}
-created: {{created}}
+project: "{{project}}"
+feature: "{{feature}}"
+created: "{{created}}"
+next_task: "{{next_task}}"
 ---
 
 # Handoff: {{feature}}
