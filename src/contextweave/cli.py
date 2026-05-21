@@ -267,8 +267,12 @@ from .brief import generate_brief, brief_all_projects
 from .diff import latest_diff
 from rich.panel import Panel
 import requests
+import urllib3
 import os
 from pathlib import Path
+
+# Disable warnings for self-signed certificates in CLI queries
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 @main.command()
 @click.argument("project_slug", required=False)
@@ -370,7 +374,11 @@ def status(project_slug):
         # Check Obsidian API
         obsidian_reachable = False
         try:
-            res = requests.get("http://127.0.0.1:27123/", timeout=1)
+            config = load_config()
+            port = config.get("obsidian_port", 27123)
+            use_https = (port == 27124)
+            scheme = "https" if use_https else "http"
+            res = requests.get(f"{scheme}://127.0.0.1:{port}/", verify=False, timeout=1)
             if res.status_code in [200, 401, 403, 404]: # 401/403 means it's running but needs auth
                 obsidian_reachable = True
         except Exception:
@@ -422,18 +430,21 @@ def doctor():
         
     # Obsidian API
     obsidian_reachable = False
+    port = config.get("obsidian_port", 27123)
+    use_https = (port == 27124)
+    scheme = "https" if use_https else "http"
     try:
-        res = requests.get("http://127.0.0.1:27123/", timeout=2)
+        res = requests.get(f"{scheme}://127.0.0.1:{port}/", verify=False, timeout=2)
         if res.status_code in [200, 401, 403, 404]: 
             obsidian_reachable = True
     except Exception:
         pass
     
     if obsidian_reachable:
-        checks.append((True, "Obsidian REST API", "localhost:27123", "online"))
+        checks.append((True, "Obsidian REST API", f"localhost:{port}", "online"))
     else:
-        checks.append((False, "Obsidian REST API", "localhost:27123", "offline"))
-        issues.append("Obsidian API not found. Install 'Local REST API' plugin in Obsidian and set port to 27123.")
+        checks.append((False, "Obsidian REST API", f"localhost:{port}", "offline"))
+        issues.append(f"Obsidian API not found. Install 'Local REST API' plugin in Obsidian and set port to {port}.")
         
     # Ollama
     ollama_running = False
