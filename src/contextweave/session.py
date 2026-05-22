@@ -43,6 +43,24 @@ def start_session(
         agent=agent,
         session_id=session_id,
     )
+
+    # Print the last handoff if one exists
+    try:
+        from .handoff import format_for_injection, get_latest
+        h = get_latest(project_slug)
+        if h:
+            from rich.console import Console
+            from rich.panel import Panel
+            console = Console(highlight=False)
+            content = format_for_injection(project_slug)
+            console.print(Panel(
+                content,
+                title="[bold yellow]Previous Session Handoff[/bold yellow]",
+                border_style="yellow",
+            ))
+    except Exception:
+        pass
+
     return session_id
 
 

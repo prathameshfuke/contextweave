@@ -31,7 +31,7 @@ _SESSION_START = '''\
 # Hook event: SessionStart
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -40,12 +40,15 @@ except Exception:
 project = os.environ.get("CONTEXTWEAVE_PROJECT", "{slug}")
 agent   = data.get("model", os.environ.get("CLAUDE_MODEL", "claude"))
 
-subprocess.run(
-    ["contextweave", "observe", project,
-     f"Session started by {{agent}}", "--source", "hook:SessionStart",
-     "--agent", agent],
-    capture_output=True,
-)
+try:
+    subprocess.run(
+        ["contextweave", "observe", project,
+         f"Session started by {{agent}}", "--source", "hook:SessionStart",
+         "--agent", agent],
+        capture_output=True,
+    )
+except Exception:
+    pass
 '''
 
 _PRE_TOOL_USE = '''\
@@ -54,7 +57,7 @@ _PRE_TOOL_USE = '''\
 # Hook event: PreToolUse (observe-only, does NOT inject context)
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -64,11 +67,14 @@ project  = os.environ.get("CONTEXTWEAVE_PROJECT", "{slug}")
 tool     = data.get("tool_name", "")
 if tool in ("Edit", "Write", "Read", "Glob", "Grep", "Bash"):
     tool_input = str(data.get("tool_input", ""))[:300]
-    subprocess.run(
-        ["contextweave", "observe", project,
-         f"Pre-tool: {{tool}}: {{tool_input}}", "--source", f"hook:PreToolUse:{{tool}}"],
-        capture_output=True,
-    )
+    try:
+        subprocess.run(
+            ["contextweave", "observe", project,
+             f"Pre-tool: {{tool}}: {{tool_input}}", "--source", f"hook:PreToolUse:{{tool}}"],
+            capture_output=True,
+        )
+    except Exception:
+        pass
 '''
 
 _POST_TOOL_USE = '''\
@@ -77,7 +83,7 @@ _POST_TOOL_USE = '''\
 # Hook event: PostToolUse
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -89,11 +95,14 @@ result_raw    = data.get("tool_response") or data.get("tool_output") or data.get
 result_preview = str(result_raw)[:500]
 content       = f"Tool used: {{tool}}. Result: {{result_preview}}"
 
-subprocess.run(
-    ["contextweave", "observe", project, content,
-     "--source", f"hook:PostToolUse:{{tool}}"],
-    capture_output=True,
-)
+try:
+    subprocess.run(
+        ["contextweave", "observe", project, content,
+         "--source", f"hook:PostToolUse:{{tool}}"],
+        capture_output=True,
+    )
+except Exception:
+    pass
 '''
 
 _POST_TOOL_FAILURE = '''\
@@ -102,7 +111,7 @@ _POST_TOOL_FAILURE = '''\
 # Hook event: PostToolFailure
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -112,11 +121,14 @@ project = os.environ.get("CONTEXTWEAVE_PROJECT", "{slug}")
 tool    = data.get("tool_name", "")
 error   = str(data.get("error") or data.get("tool_response", ""))[:300]
 
-subprocess.run(
-    ["contextweave", "observe", project,
-     f"Tool FAILED: {{tool}}. Error: {{error}}", "--source", f"hook:PostToolFailure:{{tool}}"],
-    capture_output=True,
-)
+try:
+    subprocess.run(
+        ["contextweave", "observe", project,
+         f"Tool FAILED: {{tool}}. Error: {{error}}", "--source", f"hook:PostToolFailure:{{tool}}"],
+        capture_output=True,
+    )
+except Exception:
+    pass
 '''
 
 _SUBAGENT_START = '''\
@@ -125,7 +137,7 @@ _SUBAGENT_START = '''\
 # Hook event: SubagentStart
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -135,12 +147,15 @@ project    = os.environ.get("CONTEXTWEAVE_PROJECT", "{slug}")
 agent_id   = data.get("agent_id", "unknown")
 agent_type = data.get("agent_type", "")
 
-subprocess.run(
-    ["contextweave", "observe", project,
-     f"Subagent started: {{agent_id}} ({{agent_type}})",
-     "--source", "hook:SubagentStart"],
-    capture_output=True,
-)
+try:
+    subprocess.run(
+        ["contextweave", "observe", project,
+         f"Subagent started: {{agent_id}} ({{agent_type}})",
+         "--source", "hook:SubagentStart"],
+        capture_output=True,
+    )
+except Exception:
+    pass
 '''
 
 _SUBAGENT_STOP = '''\
@@ -149,7 +164,7 @@ _SUBAGENT_STOP = '''\
 # Hook event: SubagentStop
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -158,12 +173,15 @@ except Exception:
 project  = os.environ.get("CONTEXTWEAVE_PROJECT", "{slug}")
 agent_id = data.get("agent_id", "unknown")
 
-subprocess.run(
-    ["contextweave", "observe", project,
-     f"Subagent stopped: {{agent_id}}",
-     "--source", "hook:SubagentStop"],
-    capture_output=True,
-)
+try:
+    subprocess.run(
+        ["contextweave", "observe", project,
+         f"Subagent stopped: {{agent_id}}",
+         "--source", "hook:SubagentStop"],
+        capture_output=True,
+    )
+except Exception:
+    pass
 '''
 
 _STOP = '''\
@@ -172,15 +190,21 @@ _STOP = '''\
 # Hook event: Stop
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
     pass
 
 project = os.environ.get("CONTEXTWEAVE_PROJECT", "{slug}")
-subprocess.run(["contextweave", "consolidate", project], capture_output=True)
-subprocess.run(["contextweave", "export", project], capture_output=True)
+try:
+    subprocess.run(["contextweave", "consolidate", project], capture_output=True)
+except Exception:
+    pass
+try:
+    subprocess.run(["contextweave", "export", project], capture_output=True)
+except Exception:
+    pass
 '''
 
 _SESSION_END = '''\
@@ -189,15 +213,21 @@ _SESSION_END = '''\
 # Hook event: SessionEnd  (fired when Claude Code session terminates)
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
     pass
 
 project = os.environ.get("CONTEXTWEAVE_PROJECT", "{slug}")
-subprocess.run(["contextweave", "consolidate", project], capture_output=True)
-subprocess.run(["contextweave", "export", project], capture_output=True)
+try:
+    subprocess.run(["contextweave", "consolidate", project], capture_output=True)
+except Exception:
+    pass
+try:
+    subprocess.run(["contextweave", "export", project], capture_output=True)
+except Exception:
+    pass
 '''
 
 _PRE_COMPACT = '''\
@@ -206,18 +236,21 @@ _PRE_COMPACT = '''\
 # Hook event: PreCompact
 import subprocess, sys, json, os
 
-data = {}
+data = {{}}
 try:
     data = json.load(sys.stdin)
 except Exception:
     pass
 
 project = os.environ.get("CONTEXTWEAVE_PROJECT", "{slug}")
-subprocess.run(
-    ["contextweave", "observe", project, "Context compaction triggered",
-     "--source", "hook:PreCompact"],
-    capture_output=True,
-)
+try:
+    subprocess.run(
+        ["contextweave", "observe", project, "Context compaction triggered",
+         "--source", "hook:PreCompact"],
+        capture_output=True,
+    )
+except Exception:
+    pass
 '''
 
 # Map: Claude Code hook event name → (filename, template)
@@ -245,7 +278,7 @@ def generate_hooks(project_slug: str, cwd: Optional[str] = None) -> list[dict]:
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
-    hook_entries = []
+    hook_entries = {}
 
     for event_name, filename, template in HOOK_DEFINITIONS:
         script_path = hooks_dir / filename
@@ -258,15 +291,7 @@ def generate_hooks(project_slug: str, cwd: Optional[str] = None) -> list[dict]:
         except Exception:
             pass
 
-        hook_entries.append({
-            "matcher": event_name,
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": f"python .claude/hooks/{filename}",
-                }
-            ],
-        })
+        hook_entries[event_name] = [f"python .claude/hooks/{filename}"]
         results.append({"hook_event": event_name, "file": str(script_path), "status": "written"})
 
     # Write .claude/settings.json (matches agentmemory's format exactly)

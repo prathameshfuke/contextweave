@@ -34,6 +34,7 @@ def _inject_into_file(path: Path, content: str) -> str:
     Returns 'replaced' or 'appended'.
     """
     marked = f"{_CW_START}\n{content}\n{_CW_END}"
+    path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         text = path.read_text(encoding="utf-8")
         if _CW_START in text and _CW_END in text:
@@ -42,11 +43,15 @@ def _inject_into_file(path: Path, content: str) -> str:
             new_text = text[:start] + marked + text[end:]
             path.write_text(new_text, encoding="utf-8")
             return "replaced"
+        elif _CW_START in text:
+            start = text.index(_CW_START)
+            new_text = text[:start] + marked
+            path.write_text(new_text, encoding="utf-8")
+            return "replaced"
         else:
             path.write_text(text + "\n\n" + marked + "\n", encoding="utf-8")
             return "appended"
     else:
-        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(marked + "\n", encoding="utf-8")
         return "created"
 

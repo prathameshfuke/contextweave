@@ -368,7 +368,7 @@ def import_claude(project: str):
 @click.option("--port", "-p", default=4222)
 def serve(port: int):
     """Start the web viewer on localhost:<port>."""
-    import threading, webbrowser, time
+    import threading, webbrowser, time, urllib.request
     url = f"http://localhost:{port}"
     console.print(Panel(
         f"[bold]ContextWeave Viewer[/bold]\n\n"
@@ -377,7 +377,15 @@ def serve(port: int):
         title="🌐 Web Viewer", border_style="purple",
     ))
     def open_browser():
-        time.sleep(1.5)
+        start_time = time.time()
+        while time.time() - start_time < 5:
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=1) as response:
+                    if response.status == 200:
+                        break
+            except Exception:
+                pass
+            time.sleep(0.2)
         webbrowser.open(url)
     threading.Thread(target=open_browser, daemon=True).start()
     from contextweave.viewer.app import run

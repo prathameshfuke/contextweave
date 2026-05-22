@@ -275,13 +275,18 @@ def _time_ago(iso_str: str) -> str:
         dt = datetime.fromisoformat(iso_str)
         diff = datetime.utcnow() - dt
         s = int(diff.total_seconds())
+        if s < 0:
+            return "just now"
         if s < 60:
-            return f"{s}s ago"
+            return "just now" if s < 5 else f"{s} seconds ago"
         if s < 3600:
-            return f"{s // 60}m ago"
+            m = s // 60
+            return "1 minute ago" if m == 1 else f"{m} minutes ago"
         if s < 86400:
-            return f"{s // 3600}h ago"
-        return f"{s // 86400}d ago"
+            h = s // 3600
+            return "1 hour ago" if h == 1 else f"{h} hours ago"
+        d = s // 86400
+        return "1 day ago" if d == 1 else f"{d} days ago"
     except Exception:
         return "unknown"
 
@@ -303,6 +308,14 @@ def consolidate(project_slug: str) -> Dict[str, int]:
         return {"merged": 0, "decayed": 0, "deleted": 0}
 
     conn = get_conn()
+    try:
+        # Check if there are fewer than 2 observations total
+        obs_count = conn.execute("SELECT COUNT(*) AS n FROM observations WHERE project_id = ?", (project_id,)).fetchone()["n"]
+        if obs_count < 2:
+            return {"merged": 0, "decayed": 0, "deleted": 0}
+    except Exception:
+        return {"merged": 0, "decayed": 0, "deleted": 0}
+
     merged = deleted = decayed = 0
     try:
         cutoff = (datetime.utcnow() - timedelta(hours=48)).isoformat()

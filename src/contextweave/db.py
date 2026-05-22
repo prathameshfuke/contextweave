@@ -22,15 +22,28 @@ DB_PATH = CW_DIR / "cw.db"
 # ---------------------------------------------------------------------------
 # sqlite-vec loader
 # ---------------------------------------------------------------------------
+_sqlite_vec_warning_shown = False
+
+
 def _load_sqlite_vec(conn: sqlite3.Connection) -> bool:
     """Attempt to load the sqlite-vec extension. Returns True on success."""
+    global _sqlite_vec_warning_shown
     try:
         import sqlite_vec  # type: ignore
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
         conn.enable_load_extension(False)
         return True
-    except Exception:
+    except ImportError:
+        if not _sqlite_vec_warning_shown:
+            print("Warning: sqlite-vec is not installed. Vector search is disabled.\n"
+                  "Please install it using: pip install sqlite-vec\n")
+            _sqlite_vec_warning_shown = True
+        return False
+    except Exception as e:
+        if not _sqlite_vec_warning_shown:
+            print(f"Warning: Failed to load sqlite-vec: {e}. Vector search is disabled.\n")
+            _sqlite_vec_warning_shown = True
         return False
 
 

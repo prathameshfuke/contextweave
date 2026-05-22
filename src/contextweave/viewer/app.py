@@ -29,8 +29,8 @@ app = FastAPI(title="ContextWeave Viewer", version="0.2.0")
 _STATIC_DIR = Path(__file__).parent / "static"
 _INDEX_HTML = _STATIC_DIR / "index.html"
 
-# SSE state: track last seen observation id per client
-_last_obs_id: int = 0
+# Mount static files directory
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 
 # ---------------------------------------------------------------------------
@@ -94,8 +94,13 @@ async def api_status():
         projects = conn.execute("SELECT slug FROM projects").fetchall()
         total_obs = conn.execute("SELECT COUNT(*) AS n FROM observations").fetchone()["n"]
         total_mem = conn.execute("SELECT COUNT(*) AS n FROM memories").fetchone()["n"]
+    except Exception:
+        projects = []
+        total_obs = 0
+        total_mem = 0
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
     db_size = DB_PATH.stat().st_size / (1024 * 1024) if DB_PATH.exists() else 0
 
@@ -125,9 +130,23 @@ async def api_brief(project: str = ""):
 @app.get("/api/stream")
 async def api_stream(project: str = ""):
     async def event_generator() -> AsyncGenerator[str, None]:
-        global _last_obs_id
         from contextweave.db import get_conn  # type: ignore
         from contextweave.db import get_project_id  # type: ignore
+
+        # Query MAX(id) on connection to establish client-local last_obs_id
+        last_obs_id = 0
+        try:
+            conn = get_conn()
+            row = conn.execute("SELECT MAX(id) AS max_id FROM observations").fetchone()
+            if row and row["max_id"] is not None:
+                last_obs_id = row["max_id"]
+        except Exception:
+            pass
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
         # Send initial connection event
         yield "data: {\"type\":\"connected\"}\n\n"
@@ -145,13 +164,13 @@ async def api_stream(project: str = ""):
                         pid = get_project_id(project, conn)
                         if pid:
                             query += " WHERE o.project_id = ? AND o.id > ?"
-                            params = [pid, _last_obs_id]
+                            params = [pid, last_obs_id]
                         else:
                             query += " WHERE o.id > ?"
-                            params = [_last_obs_id]
+                            params = [last_obs_id]
                     else:
                         query += " WHERE o.id > ?"
-                        params = [_last_obs_id]
+                        params = [last_obs_id]
                     query += " ORDER BY o.id ASC LIMIT 20"
 
                     rows = conn.execute(query, params).fetchall()
@@ -159,7 +178,7 @@ async def api_stream(project: str = ""):
                     conn.close()
 
                 for row in rows:
-                    _last_obs_id = max(_last_obs_id, row["id"])
+                    last_obs_id = max(last_obs_id, row["id"])
                     event_data = {
                         "id": row["id"],
                         "content": row["content"],

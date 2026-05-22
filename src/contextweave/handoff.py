@@ -37,6 +37,10 @@ def generate(project_slug: str, session_id: int) -> Optional[int]:
         questions = json.loads(row["open_questions"] or "[]")
 
         context_block = format_for_injection_raw(agent, feature, summary, next_task, questions)
+        # Append relevant project memory context to the handoff block
+        mem_block = build_context_block(project_slug, next_task or feature or summary)
+        if mem_block:
+            context_block += "\n\n" + mem_block
 
         cur = conn.execute(
             """
@@ -78,7 +82,7 @@ def format_for_injection(project_slug: str) -> str:
     """Return a formatted handoff markdown block for injection."""
     h = get_latest(project_slug)
     if not h:
-        return ""
+        return "No previous handoff — fresh project"
     time_ago = _time_ago(h.get("created_at", ""))
     lines = [
         f"## Handoff from {h['from_agent']} — {time_ago}",
