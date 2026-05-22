@@ -1,25 +1,5 @@
 """
-cli.py — Full CLI for contextweave v2.
-
-Usage:
-  contextweave init <project>
-  contextweave observe <project> <content> [--source] [--agent] [--tags]
-  contextweave search <project> <query>
-  contextweave session start <project> --agent <name> --feature <name>
-  contextweave session close <project> --summary <text> --next <text>
-  contextweave handoff show <project>
-  contextweave inject <project> [--adapter claude|cursor|copilot|gemini|all]
-  contextweave hooks install <project>
-  contextweave consolidate <project>
-  contextweave export <project>
-  contextweave watch <project>
-  contextweave graph <project> [--entity <name>]
-  contextweave brief <project>
-  contextweave import-claude <project>
-  contextweave serve [--port 4222]
-  contextweave mcp
-  contextweave doctor
-  contextweave status <project>
+_cli_entry.py — Full CLI entry point for the contextweave console script.
 """
 from __future__ import annotations
 
@@ -28,44 +8,60 @@ import os
 import sys
 from pathlib import Path
 
+# ── Windows UTF-8 fix ────────────────────────────────────────────────────────
+# Rich uses Unicode symbols (✓, ●, 🧠) that Windows cp1252 cannot encode.
+# Force stdout/stderr to UTF-8 on Windows before rich initialises.
+if sys.platform == "win32":
+    import io
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "buffer"):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
 import click
-from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
-from rich.columns import Columns
 
-console = Console()
-
-# ─── Ensure src is in path for editable installs ─────────────────────────────
-_src = Path(__file__).parent / "src"
-if _src.exists() and str(_src) not in sys.path:
-    sys.path.insert(0, str(_src))
+console = Console(highlight=False)
 
 
-# ─── Main group ──────────────────────────────────────────────────────────────
+def _time_ago(iso_str: str) -> str:
+    if not iso_str:
+        return "?"
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(iso_str)
+        diff = datetime.utcnow() - dt
+        s = int(diff.total_seconds())
+        if s < 60: return f"{s}s"
+        if s < 3600: return f"{s // 60}m"
+        if s < 86400: return f"{s // 3600}h"
+        return f"{s // 86400}d"
+    except Exception:
+        return "?"
+
+
 @click.group()
 def main():
     """🧠 ContextWeave — persistent memory layer for AI coding agents."""
-    # Ensure DB is initialized on every invocation
     try:
-        from contextweave.db import init_db  # type: ignore
+        from contextweave.db import init_db
         init_db()
     except Exception:
         pass
 
 
-# ─── init ────────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 @click.option("--description", "-d", default="", help="Project description")
 @click.option("--vault", "-v", default="", help="Obsidian vault path (optional)")
 def init(project: str, description: str, vault: str):
     """Initialize a new project."""
-    from contextweave.db import ensure_project, init_db  # type: ignore
+    from contextweave.db import ensure_project, init_db
     init_db()
     pid = ensure_project(project, description=description, vault_path=vault)
     console.print(Panel(
@@ -79,29 +75,27 @@ def init(project: str, description: str, vault: str):
     ))
 
 
-# ─── observe ─────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 @click.argument("content")
 @click.option("--source", "-s", default="cli", help="Source identifier")
 @click.option("--agent", "-a", default=None, help="Agent name")
 @click.option("--tags", "-t", default="", help="Comma-separated tags")
-def observe(project: str, content: str, source: str, agent: str, tags: str):
+def observe(project: str, content: str, source: str, agent, tags: str):
     """Capture an observation/memory for a project."""
-    from contextweave.memory import observe as _observe  # type: ignore
+    from contextweave.memory import observe as _observe
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
     obs_id = _observe(project, content, source=source, agent=agent, tags=tag_list)
     console.print(f"[green]✓[/green] Observation [bold]#{obs_id}[/bold] captured → [cyan]{project}[/cyan]")
 
 
-# ─── search ──────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 @click.argument("query")
 @click.option("--top-k", "-k", default=10, help="Max results")
 def search(project: str, query: str, top_k: int):
     """Search observations using BM25 + vector hybrid search."""
-    from contextweave.memory import search as _search  # type: ignore
+    from contextweave.memory import search as _search
 
     with Progress(SpinnerColumn(), TextColumn("[dim]Searching..."), transient=True) as p:
         p.add_task("", total=None)
@@ -129,11 +123,9 @@ def search(project: str, query: str, top_k: int):
             f"{r.get('score', 0):.3f}",
             _time_ago(r.get("created_at", "")),
         )
-
     console.print(table)
 
 
-# ─── session ─────────────────────────────────────────────────────────────────
 @main.group()
 def session():
     """Session lifecycle commands."""
@@ -146,52 +138,45 @@ def session():
 @click.option("--feature", "-f", required=True, help="Feature being worked on")
 def session_start(project: str, agent: str, feature: str):
     """Start a new session."""
-    from contextweave.session import start_session  # type: ignore
+    from contextweave.session import start_session
     session_id = start_session(project, agent, feature)
-    console.print(
-        Panel(
-            f"Session [bold]#{session_id}[/bold] started\n"
-            f"[dim]Project:[/dim] {project}\n"
-            f"[dim]Agent:[/dim]   {agent}\n"
-            f"[dim]Feature:[/dim] {feature}\n\n"
-            f"[dim]Set env: CONTEXTWEAVE_SESSION_ID={session_id}[/dim]",
-            title="[bold green]Session Started[/bold green]",
-            border_style="green",
-        )
-    )
+    console.print(Panel(
+        f"Session [bold]#{session_id}[/bold] started\n"
+        f"[dim]Project:[/dim] {project}\n"
+        f"[dim]Agent:[/dim]   {agent}\n"
+        f"[dim]Feature:[/dim] {feature}",
+        title="[bold green]Session Started[/bold green]",
+        border_style="green",
+    ))
 
 
 @session.command("close")
 @click.argument("project")
 @click.option("--summary", "-s", required=True, help="What was accomplished")
-@click.option("--next", "next_task", "-n", required=True, help="Next task for next agent")
-@click.option("--session-id", default=None, type=int, help="Session id (auto-detects latest if omitted)")
-@click.option("--files", "-f", default="", help="Comma-separated files modified")
-@click.option("--questions", "-q", default="", help="Comma-separated open questions")
+@click.option("--next", "next_task", "-n", required=True, help="Next task")
+@click.option("--session-id", default=None, type=int)
+@click.option("--files", "-f", default="")
+@click.option("--questions", "-q", default="")
 def session_close(project: str, summary: str, next_task: str, session_id, files: str, questions: str):
     """Close a session and generate a handoff."""
-    from contextweave.session import get_last_session, close_session  # type: ignore
-
+    from contextweave.session import get_last_session, close_session
     if session_id is None:
         last = get_last_session(project)
         if last is None:
             console.print("[red]No active session found.[/red]")
             return
         session_id = last["id"]
-
     file_list = [f.strip() for f in files.split(",") if f.strip()]
     q_list = [q.strip() for q in questions.split(",") if q.strip()]
     close_session(project, session_id, summary, next_task, file_list, q_list)
     console.print(Panel(
         f"Session [bold]#{session_id}[/bold] closed.\n"
-        f"[dim]Handoff generated.[/dim] Next task:\n"
-        f"[bold cyan]{next_task}[/bold cyan]",
+        f"Next task: [bold cyan]{next_task}[/bold cyan]",
         title="[bold green]Session Closed[/bold green]",
         border_style="green",
     ))
 
 
-# ─── handoff ─────────────────────────────────────────────────────────────────
 @main.group()
 def handoff():
     """Handoff commands."""
@@ -202,7 +187,7 @@ def handoff():
 @click.argument("project")
 def handoff_show(project: str):
     """Show the latest handoff for a project."""
-    from contextweave.handoff import format_for_injection, get_latest  # type: ignore
+    from contextweave.handoff import format_for_injection, get_latest
     h = get_latest(project)
     if not h:
         console.print("[dim]No handoff found.[/dim]")
@@ -211,21 +196,17 @@ def handoff_show(project: str):
     console.print(Panel(content, title="[bold purple]Latest Handoff[/bold purple]", border_style="purple"))
 
 
-# ─── inject ──────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 @click.option("--adapter", "-a", default="all",
-              type=click.Choice(["claude", "cursor", "copilot", "gemini", "all"]),
-              help="Which adapter to update")
+              type=click.Choice(["claude", "cursor", "copilot", "gemini", "all"]))
 def inject(project: str, adapter: str):
     """Inject context into agent config files."""
-    from contextweave import inject as _inj  # type: ignore
-
+    from contextweave import inject as _inj
     table = Table(title="Context Injection Results", border_style="dim")
     table.add_column("Adapter", style="cyan")
     table.add_column("Path", style="dim")
     table.add_column("Status")
-
     if adapter == "all":
         results = _inj.inject_all(project)
     elif adapter == "claude":
@@ -234,19 +215,14 @@ def inject(project: str, adapter: str):
         results = [_inj.write_cursorrules(project)]
     elif adapter == "copilot":
         results = [_inj.write_copilot(project)]
-    elif adapter == "gemini":
-        results = [_inj.write_gemini(project)]
     else:
-        results = []
-
+        results = [_inj.write_gemini(project)]
     for r in results:
-        status_color = "green" if "error" not in r["status"] else "red"
-        table.add_row(r["adapter"], r["path"], f"[{status_color}]{r['status']}[/{status_color}]")
-
+        c = "green" if "error" not in r["status"] else "red"
+        table.add_row(r["adapter"], r["path"], f"[{c}]{r['status']}[/{c}]")
     console.print(table)
 
 
-# ─── hooks install ───────────────────────────────────────────────────────────
 @main.group()
 def hooks():
     """Hook management commands."""
@@ -255,135 +231,105 @@ def hooks():
 
 @hooks.command("install")
 @click.argument("project")
-@click.option("--all-agents", is_flag=True, default=False, help="Also install Cursor + Gemini hooks")
+@click.option("--all-agents", is_flag=True, default=False)
 def hooks_install(project: str, all_agents: bool):
     """Install Claude Code hooks into .claude/hooks/."""
-    from contextweave.hooks import generate_hooks, generate_all_hooks  # type: ignore
-
+    from contextweave.hooks import generate_hooks, generate_all_hooks
     fn = generate_all_hooks if all_agents else generate_hooks
     results = fn(project)
-
     table = Table(title="Hooks Installed", border_style="dim")
     table.add_column("Hook Event", style="cyan")
     table.add_column("File", style="dim")
     table.add_column("Status")
-
     for r in results:
         table.add_row(r["hook_event"], Path(r["file"]).name, f"[green]{r['status']}[/green]")
-
     console.print(table)
-    console.print(
-        "\n[dim]Set env variable:[/dim] [bold]CONTEXTWEAVE_PROJECT=" + project + "[/bold]\n"
-        "[dim]Then restart Claude Code.[/dim]"
-    )
+    console.print(f"\n[dim]Set:[/dim] [bold]CONTEXTWEAVE_PROJECT={project}[/bold]")
 
 
-# ─── consolidate ─────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 def consolidate(project: str):
     """Run consolidation sweep: dedup, decay, prune, export."""
-    from contextweave.consolidate import run_sweep  # type: ignore
-
+    from contextweave.consolidate import run_sweep
     with Progress(SpinnerColumn(), TextColumn("[dim]Running sweep..."), transient=True) as p:
         p.add_task("", total=None)
         stats = run_sweep(project)
-
     console.print(Panel(
         f"[green]✓[/green] Consolidation complete\n\n"
-        f"  Merged observations: [bold]{stats.get('merged', 0)}[/bold]\n"
-        f"  Deleted duplicates:  [bold]{stats.get('deleted', 0)}[/bold]\n"
-        f"  Decayed memories:    [bold]{stats.get('decayed', 0)}[/bold]\n"
-        f"  Orphans pruned:      [bold]{stats.get('orphans_pruned', 0)}[/bold]\n"
-        f"  Vault files written: [bold]{stats.get('vault_files_written', 0)}[/bold]",
+        f"  Merged: [bold]{stats.get('merged', 0)}[/bold]  "
+        f"Deleted: [bold]{stats.get('deleted', 0)}[/bold]  "
+        f"Decayed: [bold]{stats.get('decayed', 0)}[/bold]  "
+        f"Orphans: [bold]{stats.get('orphans_pruned', 0)}[/bold]",
         title="[bold]Consolidation Results[/bold]",
         border_style="purple",
     ))
 
 
-# ─── export ──────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 def export(project: str):
     """Export memories to Obsidian vault."""
-    from contextweave.export import export_to_vault  # type: ignore
-
+    from contextweave.export import export_to_vault
     count = export_to_vault(project)
     if count == 0:
-        console.print("[yellow]No vault configured. Set vault_path via contextweave init or config.[/yellow]")
+        console.print("[yellow]No vault configured. Use --vault on contextweave init.[/yellow]")
     else:
-        console.print(f"[green]✓[/green] Exported [bold]{count}[/bold] files to vault.")
+        console.print(f"[green]✓[/green] Exported [bold]{count}[/bold] files.")
 
 
-# ─── watch ───────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 def watch(project: str):
-    """Watch DB for changes and auto-export to vault."""
-    from contextweave.export import watch_and_export  # type: ignore
-    console.print(f"[dim]Watching for changes in {project}... (Ctrl+C to stop)[/dim]")
+    """Watch DB for changes and auto-export."""
+    from contextweave.export import watch_and_export
     watch_and_export(project)
 
 
-# ─── graph ───────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
-@click.option("--entity", "-e", default=None, help="Start BFS from entity")
-def graph(project: str, entity: str):
-    """Display the knowledge graph as a table."""
-    from contextweave.graph import build_graph_json, query_entity, top_nodes  # type: ignore
-
+@click.option("--entity", "-e", default=None)
+def graph(project: str, entity):
+    """Display the knowledge graph."""
+    from contextweave.graph import top_nodes, query_entity
     nodes = top_nodes(project, limit=30)
     if not nodes:
-        console.print("[dim]No graph data yet. Add observations to build the graph.[/dim]")
+        console.print("[dim]No graph data yet.[/dim]")
         return
-
     table = Table(title=f"Knowledge Graph — {project}", border_style="dim")
     table.add_column("Label", min_width=30)
     table.add_column("Type", style="cyan", width=12)
     table.add_column("Mentions", style="yellow", width=10, justify="right")
-
     for n in nodes:
         table.add_row(n["label"], n.get("type") or "entity", str(n["observation_count"]))
-
     console.print(table)
-
     if entity:
         data = query_entity(project, entity, depth=2)
-        console.print(f"\n[dim]Subgraph for '{entity}': {len(data['nodes'])} nodes, {len(data['links'])} edges[/dim]")
+        console.print(f"\n[dim]Subgraph '{entity}': {len(data['nodes'])} nodes, {len(data['links'])} edges[/dim]")
 
 
-# ─── brief ───────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 def brief(project: str):
     """Generate and display the daily project brief."""
-    from contextweave.brief import generate_brief  # type: ignore
-
-    with Progress(SpinnerColumn(), TextColumn("[dim]Generating brief..."), transient=True) as p:
+    from contextweave.brief import generate_brief
+    with Progress(SpinnerColumn(), TextColumn("[dim]Generating..."), transient=True) as p:
         p.add_task("", total=None)
         text = generate_brief(project)
-
     console.print(Syntax(text, "markdown", theme="monokai", word_wrap=True))
 
 
-# ─── import-claude ───────────────────────────────────────────────────────────
 @main.command("import-claude")
 @click.argument("project")
 def import_claude(project: str):
-    """Import observations from Claude Code JSONL transcripts."""
-    import json
-    from pathlib import Path
-    from contextweave.memory import observe  # type: ignore
-
+    """Import from Claude Code JSONL transcripts."""
+    from contextweave.memory import observe
     claude_dir = Path.home() / ".claude" / "projects"
     if not claude_dir.exists():
         console.print("[red]~/.claude/projects/ not found[/red]")
         return
-
     jsonl_files = list(claude_dir.glob("**/*.jsonl"))
     console.print(f"[dim]Found {len(jsonl_files)} JSONL files...[/dim]")
-
     imported = 0
     with Progress(SpinnerColumn(), TextColumn("[dim]Importing..."), transient=True) as p:
         task = p.add_task("", total=len(jsonl_files))
@@ -392,8 +338,7 @@ def import_claude(project: str):
                 with open(jf, "r", encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
-                        if not line:
-                            continue
+                        if not line: continue
                         try:
                             msg = json.loads(line)
                         except Exception:
@@ -416,85 +361,70 @@ def import_claude(project: str):
             except Exception:
                 pass
             p.advance(task)
+    console.print(f"[green]✓[/green] Imported [bold]{imported}[/bold] observations.")
 
-    console.print(f"[green]✓[/green] Imported [bold]{imported}[/bold] observations from {len(jsonl_files)} files.")
 
-
-# ─── serve ───────────────────────────────────────────────────────────────────
 @main.command()
-@click.option("--port", "-p", default=4222, help="Port to serve on (default 4222)")
+@click.option("--port", "-p", default=4222)
 def serve(port: int):
     """Start the web viewer on localhost:<port>."""
-    import subprocess, webbrowser, threading
-
+    import threading, webbrowser, time
     url = f"http://localhost:{port}"
     console.print(Panel(
         f"[bold]ContextWeave Viewer[/bold]\n\n"
         f"  [dim]URL:[/dim] [link={url}]{url}[/link]\n"
         f"  [dim]Press Ctrl+C to stop[/dim]",
-        title="🌐 Web Viewer",
-        border_style="purple",
+        title="🌐 Web Viewer", border_style="purple",
     ))
-
     def open_browser():
-        import time; time.sleep(1.5)
+        time.sleep(1.5)
         webbrowser.open(url)
-
     threading.Thread(target=open_browser, daemon=True).start()
-
-    from contextweave.viewer.app import run  # type: ignore
+    from contextweave.viewer.app import run
     run(port=port)
 
 
-# ─── mcp ─────────────────────────────────────────────────────────────────────
 @main.command()
 def mcp():
-    """Start the MCP server (stdio transport). Connect via Claude Code MCP config."""
+    """Start the MCP server (stdio transport)."""
     console.print("[dim]Starting ContextWeave MCP server (stdio)...[/dim]", file=sys.stderr)
-    from contextweave.mcp_server import run  # type: ignore
+    from contextweave.mcp_server import run
     run()
 
 
-# ─── doctor ──────────────────────────────────────────────────────────────────
 @main.command()
 def doctor():
-    """Run health checks on the contextweave installation."""
+    """Run health checks."""
     checks = []
-
-    # DB exists
-    from contextweave.db import DB_PATH, init_db  # type: ignore
+    from contextweave.db import DB_PATH, init_db
     try:
         init_db()
         checks.append(("Database", "~/.contextweave/cw.db", True, str(DB_PATH)))
     except Exception as e:
         checks.append(("Database", str(e), False, ""))
 
-    # sqlite-vec
     try:
-        from contextweave.db import vec_available, get_conn  # type: ignore
+        from contextweave.db import vec_available
         avail = vec_available()
         checks.append(("sqlite-vec", "vector search", avail, "BM25-only mode" if not avail else "384-dim embeddings"))
     except Exception as e:
         checks.append(("sqlite-vec", str(e), False, ""))
 
-    # sentence-transformers
     try:
-        from sentence_transformers import SentenceTransformer  # type: ignore
-        checks.append(("sentence-transformers", "all-MiniLM-L6-v2", True, "will download on first use"))
+        from sentence_transformers import SentenceTransformer
+        checks.append(("sentence-transformers", "all-MiniLM-L6-v2", True, "ready"))
     except ImportError:
         checks.append(("sentence-transformers", "not installed", False, "pip install sentence-transformers"))
 
-    # MCP
     try:
-        from mcp.server.fastmcp import FastMCP  # type: ignore
-        checks.append(("MCP", "fastmcp", True, "15 tools registered"))
+        from mcp.server.fastmcp import FastMCP
+        checks.append(("MCP", "fastmcp", True, "15 tools"))
     except ImportError:
         checks.append(("MCP", "not installed", False, "pip install mcp[cli]"))
 
-    # FastAPI
     try:
-        import fastapi  # type: ignore
-        checks.append(("FastAPI", f"v{fastapi.__version__}", True, "viewer on port 4222"))
+        import fastapi
+        checks.append(("FastAPI", f"v{fastapi.__version__}", True, "viewer on :4222"))
     except ImportError:
         checks.append(("FastAPI", "not installed", False, "pip install fastapi uvicorn"))
 
@@ -508,26 +438,24 @@ def doctor():
         icon = "[green]✓[/green]" if ok else "[red]✗[/red]"
         status_str = f"[green]{status}[/green]" if ok else f"[red]{status}[/red]"
         table.add_row(name, f"{icon} {status_str}", detail)
-        if not ok:
-            all_ok = False
+        if not ok: all_ok = False
 
     console.print(table)
     if all_ok:
-        console.print("\n[bold green]All checks passed! ContextWeave is ready.[/bold green]")
+        console.print("\n[bold green]All checks passed![/bold green]")
     else:
-        console.print("\n[yellow]Some checks failed. Run `pip install -e .` to fix missing deps.[/yellow]")
+        console.print("\n[yellow]Some checks failed.[/yellow]")
         sys.exit(1)
 
 
-# ─── status ──────────────────────────────────────────────────────────────────
 @main.command()
 @click.argument("project")
 def status(project: str):
-    """Show full project status dashboard."""
-    from contextweave.memory import project_stats  # type: ignore
-    from contextweave.session import get_last_session  # type: ignore
-    from contextweave.handoff import get_latest  # type: ignore
-    from contextweave.db import DB_PATH, vec_available  # type: ignore
+    """Show project status dashboard."""
+    from contextweave.memory import project_stats
+    from contextweave.session import get_last_session
+    from contextweave.handoff import get_latest
+    from contextweave.db import DB_PATH, vec_available
 
     stats = project_stats(project)
     last = get_last_session(project)
@@ -546,42 +474,15 @@ def status(project: str):
         f"  [dim]Graph nodes:[/dim]   [bold]{stats['graph_nodes']}[/bold]",
         f"  [dim]DB size:[/dim]       [bold]{db_size:.2f} MB[/bold]",
     ]
-
     if last:
         lines += [
-            "",
-            f"  [dim]Last agent:[/dim]    [bold]{last.get('agent', '—')}[/bold]",
+            "", f"  [dim]Last agent:[/dim]    [bold]{last.get('agent', '—')}[/bold]",
             f"  [dim]Feature:[/dim]       {last.get('feature', '—')}",
             f"  [dim]Status:[/dim]        {last.get('status', '—')}",
         ]
         if last.get("summary"):
             lines.append(f"  [dim]Summary:[/dim]       {last['summary'][:60]}…")
-
     if handoff:
-        lines += [
-            "",
-            f"  [dim]Next task:[/dim]     [bold yellow]{handoff.get('next_task', '—')}[/bold yellow]",
-        ]
+        lines += ["", f"  [dim]Next task:[/dim]     [bold yellow]{handoff.get('next_task', '—')}[/bold yellow]"]
 
     console.print(Panel("\n".join(lines), title="[bold]Project Status[/bold]", border_style="purple"))
-
-
-# ─── Helpers ─────────────────────────────────────────────────────────────────
-def _time_ago(iso_str: str) -> str:
-    if not iso_str:
-        return "?"
-    try:
-        from datetime import datetime
-        dt = datetime.fromisoformat(iso_str)
-        diff = datetime.utcnow() - dt
-        s = int(diff.total_seconds())
-        if s < 60: return f"{s}s"
-        if s < 3600: return f"{s // 60}m"
-        if s < 86400: return f"{s // 3600}h"
-        return f"{s // 86400}d"
-    except Exception:
-        return "?"
-
-
-if __name__ == "__main__":
-    main()

@@ -1,26 +1,37 @@
 [project]
 name = "contextweave"
-version = "0.1.0"
-description = "A local-first, model-agnostic context persistence layer for multi-agent AI workflows."
+version = "0.2.0"
+description = "A local-first memory layer for AI coding agents — SQLite, zero external databases, local graph viewer."
 readme = "README.md"
 authors = [
     { name = "Kashish", email = "kashishsingh742@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
-    "click>=8.1.8",
-    "python-frontmatter>=1.2.0",
-    "rich>=13.9.4",
-    "toml>=0.10.2",
-    "requests>=2.32.3",
-    "sentence-transformers>=3.0.1",
-    "chromadb>=0.5.5",
-    "watchdog>=4.0.0",
+    "click>=8.0",
+    "rich>=13.0",
+    "python-frontmatter>=1.0",
+    "sentence-transformers>=3.0",
+    "sqlite-vec>=0.1",
+    "mcp[cli]>=1.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "watchdog>=4.0",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]
-contextweave = "contextweave.cli:main"
+contextweave = "contextweave._cli_entry:main"
+contextweave-mcp = "contextweave.mcp_server:run"
 
 [build-system]
-requires = ["uv_build>=0.11.14,<0.12.0"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/contextweave"]
+
+[tool.hatch.build]
+sources = ["src"]
+
+

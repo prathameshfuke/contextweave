@@ -1,9 +1,4 @@
-# ContextWeave .gitignore
-
-# Obsidian Vault (Local Knowledge Graph)
-# We exclude this because it contains local research, personal notes, 
-# and potentially sensitive project context that should stay on-machine.
-/contextweave/
+# ContextWeave v2 .gitignore
 
 # Python
 __pycache__/
@@ -11,11 +6,24 @@ __pycache__/
 *$py.class
 *.so
 .Python
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.env
+.venv
+venv/
 env/
+ENV/
+
+# Build / dist
 build/
-develop-eggs/
 dist/
-downloads/
+develop-eggs/
 eggs/
 .eggs/
 lib/
@@ -24,16 +32,14 @@ parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-.pytest_cache/
 
-# Environments
-.env
-.venv
-venv/
-ENV/
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# ContextWeave local data
+.contextweave/
 
 # IDEs
 .vscode/
@@ -42,3 +48,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
