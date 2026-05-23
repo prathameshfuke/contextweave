@@ -31,7 +31,4 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/contextweave"]
 
-[tool.hatch.build]
-sources = ["src"]
-
 

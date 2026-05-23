@@ -1726,27 +1726,6 @@
       const svg = d3.select('#graphSvg');
       svg.selectAll('*').remove();
 
-      // Definitions & Dot grid pattern
-      const defs = svg.append('defs');
-      defs.append('pattern')
-        .attr('id', 'dotGrid')
-        .attr('width', 40)
-        .attr('height', 40)
-        .attr('patternUnits', 'userSpaceOnUse')
-        .append('circle')
-        .attr('cx', 2)
-        .attr('cy', 2)
-        .attr('r', 1)
-        .attr('fill', 'var(--border-dim)')
-        .attr('opacity', 0.6);
-
-      // Grid background rect
-      svg.append('rect')
-        .attr('width', '100%')
-        .attr('height', '100%')
-        .attr('fill', 'url(#dotGrid)')
-        .style('pointer-events', 'all');
-
       const width = document.getElementById('graphSvg').clientWidth || 800;
       const height = document.getElementById('graphSvg').clientHeight || 500;
       svg.attr('width', width).attr('height', height);
@@ -1767,61 +1746,159 @@
       document.getElementById('nodesCountBadge').textContent = `[${filteredNodes.length}]`;
       document.getElementById('statusNodes').textContent = `${filteredNodes.length} nodes`;
 
-      const empty = document.getElementById('graphEmptyState');
-      if (!filteredNodes.length) {
-        empty.style.display = 'flex';
-        empty.innerHTML = `
-          <div class="empty-large-icon">○</div>
-          <div class="empty-heading">NO ENTITIES TRACKED</div>
-          <pre class="empty-code">contextweave observe my-project
-"your first observation"</pre>
-        `;
-        return;
-      } else {
-        empty.style.display = 'none';
+      // Visual helper functions
+      function nodeRadius(d) {
+        const base = 5;
+        const scale = Math.sqrt(d.observation_count || 1);
+        return Math.min(base + scale * 3.5, 38); // min 5px, max 38px
       }
 
-      // Initial positions for zoom spawning
-      filteredNodes.forEach(n => {
-        if (n.x === undefined || n.y === undefined) {
-          n.x = width / 2;
-          n.y = height / 2;
-        }
-      });
+      const NODE_COLOURS = {
+        file:     '#7ECFFF',  // ice blue
+        decision: '#C8F23C',  // acid lime
+        feature:  '#5ECFA8',  // sage green
+        agent:    '#FF8C42',  // warm orange
+        entity:   '#9090C0',  // slate blue
+        default:  '#606080',  // muted
+      };
 
-      // Main container transformed by zoom
+      function nodeColour(d) {
+        return NODE_COLOURS[d.type] || NODE_COLOURS.default;
+      }
+
+      function edgeWidth(l) {
+        return 0.6 + (l.weight || 1) * 0.4;
+      }
+
+      function edgeOpacity(l) {
+        const w = l.weight || 1;
+        if (w >= 5) return 0.65;
+        if (w >= 3) return 0.45;
+        if (w >= 2) return 0.32;
+        return 0.22;
+      }
+
+      function edgeColour(l) {
+        const sourceType = (typeof l.source === 'object' ? l.source.type : null) || 'entity';
+        const colours = {
+          file:     '#2A5A72',   // dark ice
+          decision: '#4A6015',   // dark lime
+          feature:  '#1E5442',   // dark sage
+          agent:    '#6B3A18',   // dark ember
+          entity:   '#2A2A48',   // dark slate
+          default:  '#222240',
+        };
+        return colours[sourceType] || colours.default;
+      }
+
+      // Empty state
+      if (filteredNodes.length === 0) {
+        svg.append('text')
+          .attr('x', width / 2).attr('y', height / 2 - 20)
+          .attr('text-anchor', 'middle')
+          .attr('font-family', 'Syne, sans-serif')
+          .attr('font-size', '11px')
+          .attr('fill', '#7070A0')
+          .attr('letter-spacing', '0.1em')
+          .text('NO ENTITIES TRACKED');
+        svg.append('text')
+          .attr('x', width / 2).attr('y', height / 2 + 4)
+          .attr('text-anchor', 'middle')
+          .attr('font-family', 'Syne Mono, monospace')
+          .attr('font-size', '9px')
+          .attr('fill', '#7070A0')
+          .text('contextweave observe my-project "first observation"');
+        
+        const emptyStateDiv = document.getElementById('graphEmptyState');
+        if (emptyStateDiv) emptyStateDiv.style.display = 'none';
+        return;
+      } else {
+        const emptyStateDiv = document.getElementById('graphEmptyState');
+        if (emptyStateDiv) emptyStateDiv.style.display = 'none';
+      }
+
+      // Draw dot grid background rect
+      const bgGroup = svg.append('g').attr('class', 'bg');
+
+      // Dark base
+      bgGroup.append('rect')
+        .attr('width', width).attr('height', height)
+        .attr('fill', '#070709');
+
+      // Dot grid — 1px dots every 32px
+      const dotSpacing = 32;
+      const cols = Math.ceil(width / dotSpacing) + 2;
+      const rows = Math.ceil(height / dotSpacing) + 2;
+      const dots = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          dots.push({ x: c * dotSpacing, y: r * dotSpacing });
+        }
+      }
+      bgGroup.selectAll('circle.dot')
+        .data(dots)
+        .join('circle')
+        .attr('class', 'dot')
+        .attr('cx', d => d.x)
+        .attr('cy', d => d.y)
+        .attr('r', 0.8)
+        .attr('fill', '#1C1C26')
+        .attr('pointer-events', 'none');
+
+      // Main D3 zoom group container
       const g = svg.append('g').attr('class', 'graph-container');
 
+      // Coordinates display
+      const coordDisplay = svg.append('text')
+        .attr('class', 'coord-display')
+        .attr('x', 12).attr('y', 20)
+        .attr('font-family', 'Syne Mono, monospace')
+        .attr('font-size', '9px')
+        .attr('fill', '#7070A0')
+        .attr('pointer-events', 'none');
+
+      function updateCoords(transform) {
+        const cx = Math.round(-transform.x / transform.k);
+        const cy = Math.round(-transform.y / transform.k);
+        const textVal = `x: ${cx}  y: ${cy}  z: ${transform.k.toFixed(2)}×`;
+        coordDisplay.text(textVal);
+        const htmlReadout = document.getElementById('coordReadout');
+        if (htmlReadout) {
+          htmlReadout.textContent = textVal;
+          htmlReadout.style.display = 'none';
+        }
+      }
+
+      // Initialize zoomBehavior
       zoomBehavior = d3.zoom()
-        .scaleExtent([0.1, 8])
-        .on('zoom', (event) => {
-          g.attr('transform', event.transform);
-          const k = event.transform.k.toFixed(1);
-          const x = Math.round(event.transform.x);
-          const y = Math.round(event.transform.y);
-          document.getElementById('coordReadout').textContent = `x: ${x}  y: ${y}  zoom: ${k}×`;
-          g.selectAll('.node-label').style('opacity', event.transform.k > 1.8 ? 1 : 0);
-        });
+        .scaleExtent([0.1, 8]);
+
+      zoomBehavior.on('zoom', (event) => {
+        const t = event.transform;
+        g.attr('transform', t);
+        bgGroup.attr('transform', `translate(${t.x % dotSpacing}, ${t.y % dotSpacing})`);
+        onZoom(t);
+        updateCoords(t);
+      });
 
       svg.call(zoomBehavior);
       svg.on('dblclick.zoom', null);
 
-      // Render links
-      const link = g.append('g')
+      // Render edges first (so nodes sit on top)
+      const edgeSelection = g.append('g').attr('class', 'edges')
         .selectAll('line')
         .data(filteredLinks)
-        .enter()
-        .append('line')
-        .style('stroke', 'var(--border-mid)')
-        .style('stroke-opacity', 0.5)
-        .style('stroke-width', d => 0.3 + (d.weight || 1) * 0.2);
+        .join('line')
+        .attr('stroke', l => edgeColour(l))
+        .attr('stroke-width', l => edgeWidth(l))
+        .attr('stroke-opacity', l => edgeOpacity(l))
+        .attr('stroke-linecap', 'round');
 
-      // Render nodes
-      const node = g.append('g')
-        .selectAll('.node-group')
+      // Render nodes on top
+      const nodeGroup = g.append('g').attr('class', 'nodes')
+        .selectAll('g')
         .data(filteredNodes)
-        .enter()
-        .append('g')
+        .join('g')
         .attr('class', 'node-group')
         .attr('role', 'button')
         .attr('tabindex', '0')
@@ -1831,70 +1908,209 @@
           .on('drag', dragged)
           .on('end', dragended));
 
-      // Draw node circle (no stroke by default)
-      node.append('circle')
-        .attr('r', d => 4 + Math.sqrt(d.observation_count || 1) * 2.5)
-        .style('fill', d => getNodeColor(d.type))
-        .style('transition', 'filter 0.15s ease');
+      // Layered circles inside each group based on tier
+      nodeGroup.each(function(d) {
+        const el = d3.select(this);
+        const count = d.observation_count || 1;
+        const rVal = nodeRadius(d);
+        const col = nodeColour(d);
 
-      // Draw labels (8px offset above node)
-      node.append('text')
+        if (count >= 10) {
+          // Tier 1 — Hub nodes
+          el.append('circle')
+            .attr('r', rVal + 4)
+            .attr('data-r', rVal + 4)
+            .attr('fill', 'none')
+            .attr('stroke', col)
+            .attr('stroke-width', 1)
+            .attr('opacity', 0.35);
+
+          el.append('circle')
+            .attr('r', rVal)
+            .attr('data-r', rVal)
+            .attr('fill', col)
+            .attr('opacity', 1);
+
+          el.append('circle')
+            .attr('r', rVal * 0.35)
+            .attr('data-r', rVal * 0.35)
+            .attr('fill', 'white')
+            .attr('opacity', 0.25);
+        } else if (count >= 3 && count < 10) {
+          // Tier 2 — Normal nodes
+          el.append('circle')
+            .attr('r', rVal)
+            .attr('data-r', rVal)
+            .attr('fill', col)
+            .attr('opacity', 0.9);
+
+          el.append('circle')
+            .attr('r', rVal * 0.3)
+            .attr('data-r', rVal * 0.3)
+            .attr('fill', 'white')
+            .attr('opacity', 0.15);
+        } else {
+          // Tier 3 — Leaf nodes
+          el.append('circle')
+            .attr('r', rVal)
+            .attr('data-r', rVal)
+            .attr('fill', col)
+            .attr('fill-opacity', 0.55)
+            .attr('stroke', col)
+            .attr('stroke-width', 1)
+            .attr('stroke-opacity', 0.8);
+        }
+      });
+
+      // Build linked nodes lookup once
+      const linkedNodes = new Set();
+      filteredLinks.forEach(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        linkedNodes.add(`${s}-${t}`);
+        linkedNodes.add(`${t}-${s}`);
+      });
+
+      function isConnected(a, b) {
+        return linkedNodes.has(`${a.id}-${b.id}`);
+      }
+
+      let currentZoom = 1;
+
+      // Append zoom-responsive labels
+      nodeGroup.append('text')
         .attr('class', 'node-label')
-        .attr('y', d => -(4 + Math.sqrt(d.observation_count || 1) * 2.5) - 8)
-        .text(d => d.label);
+        .attr('dy', d => -(nodeRadius(d) + 6))
+        .attr('text-anchor', 'middle')
+        .attr('font-family', 'Syne Mono, monospace')
+        .attr('font-size', '9px')
+        .attr('fill', '#E8E8F0')
+        .attr('pointer-events', 'none')
+        .attr('opacity', d => d.observation_count >= 10 ? 0.9 : 0) // hubs always show
+        .text(d => {
+          const label = d.label || '';
+          const parts = label.split('/');
+          const short = parts[parts.length - 1];
+          return short.length > 18 ? short.slice(0, 16) + '…' : short;
+        });
 
-      // Interactive mouse hover highlights
-      node.on('mouseenter', (event, d) => {
-        d3.select(event.currentTarget).select('circle')
-          .style('filter', 'brightness(1.3)');
-        d3.select(event.currentTarget).select('.node-label')
-          .style('opacity', 1);
+      function onZoom(transform) {
+        currentZoom = transform.k;
+        svg.selectAll('.node-label')
+          .attr('opacity', function(d) {
+            if (d.observation_count >= 10) return 0.9;
+            if (currentZoom >= 2.2) return 0.8;
+            if (currentZoom >= 1.5) return d.observation_count >= 5 ? 0.7 : 0;
+            return 0;
+          })
+          .attr('font-size', `${9 / currentZoom}px`);
+      }
 
-        link.style('stroke-opacity', l => {
+      // Mouse enter/leave listeners
+      nodeGroup.on('mouseenter', function(event, d) {
+        d3.select(this).raise();
+        d3.select(this).selectAll('circle')
+          .transition().duration(120)
+          .attr('r', (c, i, nodes) => {
+            const current = +d3.select(nodes[i]).attr('r');
+            return current * 1.25;
+          });
+
+        d3.select(this).select('.node-label').attr('opacity', 1);
+
+        edgeSelection
+          .attr('stroke-opacity', l => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            return s === d.id || t === d.id ? 0.9 : 0.08;
+          })
+          .attr('stroke-width', l => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            return s === d.id || t === d.id ? edgeWidth(l) * 2.5 : edgeWidth(l);
+          });
+
+        nodeGroup
+          .attr('opacity', n => isConnected(d, n) || n.id === d.id ? 1 : 0.15);
+
+        // Halo lines
+        const connectedLinks = filteredLinks.filter(l => {
           const s = typeof l.source === 'object' ? l.source.id : l.source;
           const t = typeof l.target === 'object' ? l.target.id : l.target;
-          return (s === d.id || t === d.id) ? 1.0 : 0.15;
+          return s === d.id || t === d.id;
         });
-      }).on('mouseleave', (event, d) => {
-        d3.select(event.currentTarget).select('circle')
-          .style('filter', 'none');
 
-        const transform = d3.zoomTransform(svg.node());
-        d3.select(event.currentTarget).select('.node-label')
-          .style('opacity', transform.k > 1.8 ? 1 : 0);
+        g.selectAll('.halo-line').remove();
+        g.selectAll('.halo-line')
+          .data(connectedLinks)
+          .join('line')
+          .attr('class', 'halo-line')
+          .attr('x1', l => l.source.x).attr('y1', l => l.source.y)
+          .attr('x2', l => l.target.x).attr('y2', l => l.target.y)
+          .attr('stroke', '#C8F23C')
+          .attr('stroke-width', 0.8)
+          .attr('stroke-opacity', 0.25)
+          .attr('stroke-linecap', 'round');
+      });
 
-        link.style('stroke-opacity', 0.5);
+      nodeGroup.on('mouseleave', function(event, d) {
+        d3.select(this).selectAll('circle')
+          .transition().duration(200)
+          .attr('r', (c, i, nodes) => +d3.select(nodes[i]).attr('data-r'));
+
+        edgeSelection
+          .attr('stroke-opacity', l => edgeOpacity(l))
+          .attr('stroke-width', l => edgeWidth(l));
+
+        nodeGroup.attr('opacity', 1);
+
+        if (currentZoom < 1.8) {
+          d3.select(this).select('.node-label').attr('opacity', d => {
+            if (d.observation_count >= 10) return 0.9;
+            if (currentZoom >= 2.2) return 0.8;
+            if (currentZoom >= 1.5) return d.observation_count >= 5 ? 0.7 : 0;
+            return 0;
+          });
+        }
+
+        g.selectAll('.halo-line').remove();
       });
 
       // Click callback
-      node.on('click', (event, d) => {
+      nodeGroup.on('click', function(event, d) {
         event.stopPropagation();
         selectedNodeId = d.id;
 
-        g.selectAll('.node-group circle')
-          .style('stroke', 'none')
-          .style('stroke-width', '0');
+        g.selectAll('.selection-ring').remove();
 
-        d3.select(event.currentTarget).select('circle')
-          .style('stroke', 'var(--acid)')
-          .style('stroke-width', '1.5px');
+        d3.select(this).append('circle')
+          .attr('class', 'selection-ring')
+          .attr('r', nodeRadius(d) + 7)
+          .attr('fill', 'none')
+          .attr('stroke', '#C8F23C')
+          .attr('stroke-width', 1.5)
+          .attr('stroke-dasharray', '3 2')
+          .attr('opacity', 0.85);
 
         showNodeDetailSlider(d);
       });
 
       // Keyboard callback
-      node.on('keydown', (event, d) => {
+      nodeGroup.on('keydown', function(event, d) {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           selectedNodeId = d.id;
 
-          g.selectAll('.node-group circle')
-            .style('stroke', 'none')
-            .style('stroke-width', '0');
+          g.selectAll('.selection-ring').remove();
 
-          d3.select(event.currentTarget).select('circle')
-            .style('stroke', 'var(--acid)')
-            .style('stroke-width', '1.5px');
+          d3.select(this).append('circle')
+            .attr('class', 'selection-ring')
+            .attr('r', nodeRadius(d) + 7)
+            .attr('fill', 'none')
+            .attr('stroke', '#C8F23C')
+            .attr('stroke-width', 1.5)
+            .attr('stroke-dasharray', '3 2')
+            .attr('opacity', 0.85);
 
           showNodeDetailSlider(d);
         }
@@ -1903,27 +2119,95 @@
       // Clear selection on background click
       svg.on('click', () => {
         selectedNodeId = null;
-        g.selectAll('.node-group circle')
-          .style('stroke', 'none')
-          .style('stroke-width', '0');
+        g.selectAll('.selection-ring').remove();
         closeNodeDetailSlider();
       });
 
-      // Force simulation settings
+      // Initialize positions for drift spawn
+      filteredNodes.forEach(d => {
+        d.x = width / 2 + (Math.random() - 0.5) * 40;
+        d.y = height / 2 + (Math.random() - 0.5) * 40;
+      });
+
+      // Spawn animations
+      nodeGroup.attr('opacity', 0)
+        .transition()
+        .duration(600)
+        .delay((d, i) => i * 12)
+        .attr('opacity', 1);
+
+      edgeSelection.attr('stroke-opacity', 0)
+        .transition()
+        .duration(400)
+        .delay(300)
+        .attr('stroke-opacity', l => edgeOpacity(l));
+
+      // Force simulation
       simulation = d3.forceSimulation(filteredNodes)
-        .force('link', d3.forceLink(filteredLinks).id(d => d.id).distance(100))
-        .force('charge', d3.forceManyBody().strength(-150))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide(d => (4 + Math.sqrt(d.observation_count || 1) * 2.5) + 12))
+        .force('link', d3.forceLink(filteredLinks)
+          .id(d => d.id)
+          .distance(d => {
+            const sourceR = nodeRadius(d.source);
+            const targetR = nodeRadius(d.target);
+            return 60 + (sourceR + targetR) * 2.2;
+          })
+          .strength(0.3))
+        .force('charge', d3.forceManyBody()
+          .strength(d => -(80 + nodeRadius(d) * 12))
+          .distanceMin(10)
+          .distanceMax(400))
+        .force('center', d3.forceCenter(width / 2, height / 2).strength(0.04))
+        .force('collision', d3.forceCollide()
+          .radius(d => nodeRadius(d) + 12)
+          .strength(0.85))
+        .force('radial', d3.forceRadial(
+          d => d.observation_count >= 5 ? 0 : width * 0.3,
+          width / 2, height / 2
+        ).strength(d => d.observation_count >= 5 ? 0 : 0.05))
+        .alphaDecay(0.02)
+        .velocityDecay(0.35)
         .on('tick', () => {
-          link
+          edgeSelection
             .attr('x1', d => d.source.x)
             .attr('y1', d => d.source.y)
             .attr('x2', d => d.target.x)
             .attr('y2', d => d.target.y);
 
-          node.attr('transform', d => `translate(${d.x}, ${d.y})`);
+          g.selectAll('.halo-line')
+            .attr('x1', l => l.source.x)
+            .attr('y1', l => l.source.y)
+            .attr('x2', l => l.target.x)
+            .attr('y2', l => l.target.y);
+
+          nodeGroup.attr('transform', d => `translate(${d.x}, ${d.y})`);
         });
+
+      // Static SVG legend
+      const legend = svg.append('g')
+        .attr('class', 'legend')
+        .attr('transform', `translate(16, ${height - 16})`);
+
+      const legendItems = [
+        { type: 'file',     label: 'File',     colour: '#7ECFFF' },
+        { type: 'decision', label: 'Decision', colour: '#C8F23C' },
+        { type: 'feature',  label: 'Feature',  colour: '#5ECFA8' },
+        { type: 'agent',    label: 'Agent',    colour: '#FF8C42' },
+        { type: 'entity',   label: 'Entity',   colour: '#9090C0' },
+      ];
+
+      legendItems.forEach((item, i) => {
+        const row = legend.append('g').attr('transform', `translate(${i * 72}, 0)`);
+        row.append('circle').attr('r', 4).attr('fill', item.colour).attr('cy', -4);
+        row.append('text')
+          .attr('x', 9).attr('y', -1)
+          .attr('font-family', 'Syne Mono, monospace')
+          .attr('font-size', '8px')
+          .attr('fill', '#7070A0')
+          .text(item.label);
+      });
+
+      // Initial coords update
+      updateCoords(d3.zoomIdentity);
     }
 
     function dragstarted(event, d) {
