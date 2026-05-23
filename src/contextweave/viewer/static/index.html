@@ -1,22 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CW // CONTEXTWEAVE</title>
-  <meta name="description" content="Editorial Dark Intelligence memory viewer dashboard for contextweave project observations and graph dependencies.">
-  
+  <meta name="description"
+    content="Editorial Dark Intelligence memory viewer dashboard for contextweave project observations and graph dependencies.">
+
   <!-- Typography imports from Google Fonts CDN -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
-  
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+    rel="stylesheet">
+
   <!-- D3.js v7 CDN -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  
+
   <style>
     /* Reset and box model */
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
@@ -24,25 +30,37 @@
 
     :root {
       /* Backgrounds — very dark, warm-cool mix */
-      --bg-root:   #070709;   /* page root — deepest */
-      --bg-panel:  #0C0C10;   /* panel background */
-      --bg-card:   #111116;   /* card / row background */
-      --bg-raised: #17171E;   /* hover states, selected rows */
+      --bg-root: #070709;
+      /* page root — deepest */
+      --bg-panel: #0C0C10;
+      /* panel background */
+      --bg-card: #111116;
+      /* card / row background */
+      --bg-raised: #17171E;
+      /* hover states, selected rows */
 
       /* Borders — extremely subtle */
-      --border-dim:    #1C1C26;
-      --border-mid:    #26263A;
+      --border-dim: #1C1C26;
+      --border-mid: #26263A;
       --border-bright: #35354E;
 
       /* Accents — sharp, unexpected, non-generic */
-      --acid:    #C8F23C;   /* electric lime — primary accent. CTAs, active states, live dot */
-      --ice:     #7ECFFF;   /* cold blue — file nodes, links, secondary data */
-      --ember:   #FF8C42;   /* warm orange — agent nodes, warnings */
-      --rose:    #FF4E6A;   /* sharp red-pink — errors, decay, coral */
-      --sage:    #5ECFA8;   /* cool green — success, completed sessions */
-      --chalk:   #E8E8F0;   /* near-white — primary text */
-      --slate:   #7070A0;   /* mid-grey-blue — secondary text */
-      --dim:     #363650;   /* muted — purely decoration dots, lines */
+      --acid: #C8F23C;
+      /* electric lime — primary accent. CTAs, active states, live dot */
+      --ice: #7ECFFF;
+      /* cold blue — file nodes, links, secondary data */
+      --ember: #FF8C42;
+      /* warm orange — agent nodes, warnings */
+      --rose: #FF4E6A;
+      /* sharp red-pink — errors, decay, coral */
+      --sage: #5ECFA8;
+      /* cool green — success, completed sessions */
+      --chalk: #E8E8F0;
+      /* near-white — primary text */
+      --slate: #7070A0;
+      /* mid-grey-blue — secondary text */
+      --dim: #363650;
+      /* muted — purely decoration dots, lines */
 
       /* Typography */
       --font-mono: 'Syne Mono', monospace;
@@ -50,7 +68,8 @@
       --font-body: 'DM Sans', sans-serif;
     }
 
-    body, html {
+    body,
+    html {
       width: 100%;
       height: 100%;
       background-color: var(--bg-root);
@@ -61,7 +80,10 @@
     }
 
     /* Accessibility focus styling */
-    button:focus, select:focus, input:focus, [tabindex="0"]:focus {
+    button:focus,
+    select:focus,
+    input:focus,
+    [tabindex="0"]:focus {
       outline: 1px solid var(--acid) !important;
       outline-offset: 2px !important;
     }
@@ -71,21 +93,31 @@
       width: 3px;
       height: 3px;
     }
+
     ::-webkit-scrollbar-track {
       background: var(--bg-panel);
     }
+
     ::-webkit-scrollbar-thumb {
       background: var(--border-bright);
       border-radius: 0;
     }
+
     ::-webkit-scrollbar-thumb:hover {
       background: var(--slate);
     }
 
     /* Staggered page reveal animations */
     @keyframes revealUp {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .app-container {
@@ -207,9 +239,17 @@
     }
 
     @keyframes pulseDot {
-      0% { opacity: 0.3; }
-      50% { opacity: 1; }
-      100% { opacity: 0.3; }
+      0% {
+        opacity: 0.3;
+      }
+
+      50% {
+        opacity: 1;
+      }
+
+      100% {
+        opacity: 0.3;
+      }
     }
 
     .live-dot.active {
@@ -352,7 +392,8 @@
       outline: none;
     }
 
-    .session-row:hover, .session-row.active {
+    .session-row:hover,
+    .session-row.active {
       background-color: var(--bg-raised);
     }
 
@@ -368,11 +409,25 @@
       font-size: 11px;
     }
 
-    .session-agent.claude { color: var(--ice); }
-    .session-agent.gemini { color: var(--sage); }
-    .session-agent.copilot { color: var(--ember); }
-    .session-agent.codex { color: var(--acid); }
-    .session-agent.default { color: var(--chalk); }
+    .session-agent.claude {
+      color: var(--ice);
+    }
+
+    .session-agent.gemini {
+      color: var(--sage);
+    }
+
+    .session-agent.copilot {
+      color: var(--ember);
+    }
+
+    .session-agent.codex {
+      color: var(--acid);
+    }
+
+    .session-agent.default {
+      color: var(--chalk);
+    }
 
     .session-feature {
       font-family: var(--font-body);
@@ -396,16 +451,38 @@
       font-size: 9px;
     }
 
-    .session-status.completed { color: var(--sage); }
-    .session-status.in-progress { color: var(--ember); }
-    .session-status.failed { color: var(--rose); }
+    .session-status.completed {
+      color: var(--sage);
+    }
+
+    .session-status.in-progress {
+      color: var(--ember);
+    }
+
+    .session-status.failed {
+      color: var(--rose);
+    }
 
     /* Left border agent hover states */
-    .session-row.claude { border-left-color: var(--ice); }
-    .session-row.gemini { border-left-color: var(--sage); }
-    .session-row.copilot { border-left-color: var(--ember); }
-    .session-row.codex { border-left-color: var(--acid); }
-    .session-row.default { border-left-color: var(--chalk); }
+    .session-row.claude {
+      border-left-color: var(--ice);
+    }
+
+    .session-row.gemini {
+      border-left-color: var(--sage);
+    }
+
+    .session-row.copilot {
+      border-left-color: var(--ember);
+    }
+
+    .session-row.codex {
+      border-left-color: var(--acid);
+    }
+
+    .session-row.default {
+      border-left-color: var(--chalk);
+    }
 
     /* DAILY BRIEF panel */
     .brief-panel {
@@ -439,7 +516,8 @@
       line-height: 1.7;
       overflow: hidden;
       transition: max-height 0.2s ease-out;
-      max-height: 0; /* collapsed by default */
+      max-height: 0;
+      /* collapsed by default */
     }
 
     .brief-content.expanded {
@@ -489,7 +567,9 @@
       z-index: 10;
     }
 
-    .toolbar-select, .toolbar-badge, .toolbar-btn {
+    .toolbar-select,
+    .toolbar-badge,
+    .toolbar-btn {
       font-family: var(--font-mono);
       font-size: 9px;
       color: var(--slate);
@@ -513,7 +593,8 @@
       user-select: none;
     }
 
-    .toolbar-btn:hover, .toolbar-select:hover {
+    .toolbar-btn:hover,
+    .toolbar-select:hover {
       border-color: var(--border-bright);
       color: var(--chalk);
     }
@@ -733,6 +814,7 @@
       line-height: 1.6;
       display: -webkit-box;
       -webkit-line-clamp: 3;
+      line-clamp: 3;
       -webkit-box-orient: vertical;
       overflow: hidden;
       margin-top: 6px;
@@ -742,6 +824,7 @@
     .mem-card.expanded .mem-card-content {
       display: block;
       -webkit-line-clamp: unset;
+      line-clamp: none;
     }
 
     .decay-bar-label {
@@ -767,8 +850,13 @@
 
     /* SSE New Card animations */
     @keyframes newCardTransition {
-      from { background-color: var(--bg-raised); }
-      to   { background-color: transparent; }
+      from {
+        background-color: var(--bg-raised);
+      }
+
+      to {
+        background-color: transparent;
+      }
     }
 
     .new-card-flash {
@@ -776,8 +864,13 @@
     }
 
     @keyframes newTagFadeout {
-      from { opacity: 1; }
-      to   { opacity: 0; }
+      from {
+        opacity: 1;
+      }
+
+      to {
+        opacity: 0;
+      }
     }
 
     .new-tag {
@@ -790,7 +883,8 @@
     }
 
     /* Empty states */
-    .empty-text, .error-text {
+    .empty-text,
+    .error-text {
       font-family: var(--font-mono);
       font-size: 10px;
       color: var(--slate);
@@ -803,7 +897,8 @@
     }
 
     /* Bottom status bar */
-    .status-left, .status-right {
+    .status-left,
+    .status-right {
       display: flex;
       aria-label: "Status metadata";
       align-items: center;
@@ -892,10 +987,13 @@
 
       .layout-grid {
         flex-direction: column;
-        height: calc(100vh - 80px); /* 40px status bar + 40px mobile tabs */
+        height: calc(100vh - 80px);
+        /* 40px status bar + 40px mobile tabs */
       }
 
-      .left-panel, .graph-panel, .memory-panel {
+      .left-panel,
+      .graph-panel,
+      .memory-panel {
         display: none !important;
         width: 100% !important;
         max-width: 100% !important;
@@ -924,7 +1022,8 @@
       }
 
       .left-panel.active-brief .brief-content {
-        max-height: unset; /* display full brief directly */
+        max-height: unset;
+        /* display full brief directly */
       }
 
       .left-panel.active-sessions .project-header-container,
@@ -949,6 +1048,7 @@
     }
   </style>
 </head>
+
 <body>
 
   <div class="app-container">
@@ -962,15 +1062,16 @@
 
     <!-- Main Workspace columns grid -->
     <main class="layout-grid">
-      
+
       <!-- LEFT COLUMN -->
       <aside class="left-panel" aria-label="Project Status and Sessions">
-        
+
         <!-- Project header -->
         <div class="project-header-container">
           <div class="project-top-row">
             <span class="brand-wordmark">CW</span>
-            <span class="live-indicator"><span class="live-dot" id="liveDot">●</span> <span id="liveText">LIVE</span></span>
+            <span class="live-indicator"><span class="live-dot" id="liveDot">●</span> <span
+                id="liveText">LIVE</span></span>
           </div>
           <hr class="header-divider">
           <div class="project-selector-wrapper">
@@ -986,35 +1087,35 @@
         <section class="system-panel" aria-label="System status metrics">
           <div class="panel-section-title">SYSTEM</div>
           <hr class="panel-divider">
-          
+
           <div class="system-row">
             <span class="status-dot dot-offline" id="sysDotDB" role="status" aria-label="DB: offline">○</span>
             <span class="system-label">DB</span>
             <span class="system-value" id="sysValDB">—</span>
             <span class="system-status" id="sysStatusDB">offline</span>
           </div>
-          
+
           <div class="system-row">
             <span class="status-dot dot-offline" id="sysDotMem" role="status" aria-label="MEMORY: offline">○</span>
             <span class="system-label">MEMORY</span>
             <span class="system-value" id="sysValMem">—</span>
             <span class="system-status" id="sysStatusMem">offline</span>
           </div>
-          
+
           <div class="system-row">
             <span class="status-dot dot-offline" id="sysDotMCP" role="status" aria-label="MCP: offline">○</span>
             <span class="system-label">MCP</span>
             <span class="system-value" id="sysValMCP">—</span>
             <span class="system-status" id="sysStatusMCP">offline</span>
           </div>
-          
+
           <div class="system-row">
             <span class="status-dot dot-offline" id="sysDotEmbed" role="status" aria-label="EMBED: offline">○</span>
             <span class="system-label">EMBED</span>
             <span class="system-value" id="sysValEmbed">MiniLM-L6</span>
             <span class="system-status" id="sysStatusEmbed">offline</span>
           </div>
-          
+
           <hr class="panel-divider">
         </section>
 
@@ -1029,7 +1130,8 @@
 
         <!-- Collapsible DAILY BRIEF -->
         <section class="brief-panel" aria-label="Project daily briefing">
-          <button class="brief-title-bar" id="briefTitleBtn" aria-expanded="false" aria-controls="briefContent" onclick="toggleBriefPanel()">
+          <button class="brief-title-bar" id="briefTitleBtn" aria-expanded="false" aria-controls="briefContent"
+            onclick="toggleBriefPanel()">
             <span class="panel-section-title">DAILY BRIEF</span>
             <span class="brief-toggle-icon" id="briefToggleIcon">▾</span>
           </button>
@@ -1045,8 +1147,8 @@
       <!-- CENTER COLUMN: STAR CHART GRAPH -->
       <section class="graph-panel active" id="graphSection" aria-label="Interactive entity relationship graph">
         <!-- Coordinate HUD display -->
-        <div class="coordinate-readout" id="coordReadout">x: 0  y: 0  zoom: 1.0×</div>
-        
+        <div class="coordinate-readout" id="coordReadout">x: 0 y: 0 zoom: 1.0×</div>
+
         <!-- Graph toolbar controls -->
         <div class="graph-toolbar">
           <select id="graphFilter" class="toolbar-select" aria-label="Filter graph nodes by category">
@@ -1103,7 +1205,8 @@
       <section class="memory-panel" id="memorySection" aria-label="Chronological memory observation stream">
         <div class="search-container">
           <span class="search-icon">⌕</span>
-          <input type="text" id="memorySearch" placeholder="search memories_____________" aria-label="Search memories" role="searchbox">
+          <input type="text" id="memorySearch" placeholder="search memories_____________" aria-label="Search memories"
+            role="searchbox">
           <span id="memoriesCount" class="mem-count">0</span>
         </div>
         <div class="memory-stream-list" id="memoryStream" role="region" aria-live="polite">
@@ -1143,7 +1246,7 @@
     let allSessions = [];
     let activeSessionFilter = null;
     let lastMemoriesData = [];
-    
+
     let simulation = null;
     let zoomBehavior = null;
     let selectedNodeId = null;
@@ -1152,7 +1255,7 @@
     let sseReconnectTimeout = null;
     let sseDelay = 1000;
     let sseReconnectAttempts = 0;
-    
+
     let searchDebounceTimeout = null;
     let lastSyncSeconds = 0;
 
@@ -1160,10 +1263,10 @@
     function escHtml(str) {
       if (!str) return '';
       return str.replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
 
     // ─── Human readable timeAgo helper ───
@@ -1274,7 +1377,7 @@
             opt.textContent = p;
             select.appendChild(opt);
           });
-          
+
           if (prevSelected && data.projects.includes(prevSelected)) {
             select.value = prevSelected;
           } else if (data.projects.length > 0) {
@@ -1296,7 +1399,7 @@
         document.getElementById('sysStatusMem').textContent = 'offline';
         document.getElementById('sysDotEmbed').className = 'status-dot dot-offline';
         document.getElementById('sysStatusEmbed').textContent = 'offline';
-        
+
         document.getElementById('liveDot').classList.remove('active');
         document.getElementById('liveDot').style.color = 'var(--dim)';
         document.getElementById('liveText').textContent = 'OFFLINE';
@@ -1310,7 +1413,7 @@
 
       activeSessionFilter = null;
       document.getElementById('statusProject').textContent = slug;
-      
+
       // Reset details panel and scroll lists
       closeNodeDetailSlider();
       document.getElementById('briefContent').innerHTML = '<div class="empty-text">Loading brief...</div>';
@@ -1341,17 +1444,17 @@
         const response = await fetch(`/api/brief?project=${encodeURIComponent(currentProject)}`);
         if (!response.ok) throw new Error(`brief API failed: status ${response.status}`);
         const data = await response.json();
-        
+
         const container = document.getElementById('briefContent');
         if (data.brief) {
           const lines = data.brief.split('\n');
           container.innerHTML = '';
-          
+
           lines.forEach(line => {
             const trimmed = line.trim();
             if (!trimmed && line !== '') return;
             const div = document.createElement('div');
-            
+
             // Basic markdown headers parsing
             if (trimmed.startsWith('#') || trimmed.startsWith('##') || trimmed.startsWith('###')) {
               div.className = 'brief-header';
@@ -1453,7 +1556,7 @@
     async function loadMemories(q = '') {
       if (!currentProject) return;
       try {
-        const url = q 
+        const url = q
           ? `/api/memories?project=${encodeURIComponent(currentProject)}&q=${encodeURIComponent(q)}&limit=50`
           : `/api/memories?project=${encodeURIComponent(currentProject)}&limit=50`;
         const response = await fetch(url);
@@ -1543,7 +1646,7 @@
     // Prepend SSE observation card with transition flash
     function prependMemoryCard(m) {
       const container = document.getElementById('memoryStream');
-      
+
       const emptyState = container.querySelector('.memory-empty-state');
       if (emptyState) {
         container.innerHTML = '';
@@ -1583,7 +1686,7 @@
 
       const card = tempDiv.firstElementChild;
       container.insertBefore(card, container.firstChild);
-      
+
       // Update local storage representation
       lastMemoriesData.unshift(m);
       document.getElementById('memoriesCount').textContent = lastMemoriesData.length;
@@ -1755,7 +1858,7 @@
       }).on('mouseleave', (event, d) => {
         d3.select(event.currentTarget).select('circle')
           .style('filter', 'none');
-        
+
         const transform = d3.zoomTransform(svg.node());
         d3.select(event.currentTarget).select('.node-label')
           .style('opacity', transform.k > 1.8 ? 1 : 0);
@@ -1932,7 +2035,7 @@
           method: 'POST'
         });
         if (!res.ok) throw new Error(`consolidate response code: ${res.status}`);
-        
+
         // Reload data feeds
         pollHealth();
         loadMemories();
@@ -1957,7 +2060,7 @@
         sseDelay = 1000;
         sseReconnectAttempts = 0;
         lastSyncSeconds = 0;
-        
+
         document.getElementById('liveDot').classList.add('active');
         document.getElementById('liveText').textContent = 'LIVE';
 
@@ -2014,7 +2117,7 @@
     // ─── Initialization ───
     async function init() {
       await pollHealth();
-      
+
       // Update sync ticker timer
       setInterval(() => {
         lastSyncSeconds++;
@@ -2031,4 +2134,5 @@
     init();
   </script>
 </body>
+
 </html>
