@@ -3,15 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>◈ CONTEXTWEAVE // TERMINAL</title>
-  <meta name="description" content="Brutalist Terminal Memory Viewer for AI coding agents">
-  <!-- Google Fonts CDN -->
+  <title>CW // CONTEXTWEAVE</title>
+  <meta name="description" content="Editorial Dark Intelligence memory viewer dashboard for contextweave project observations and graph dependencies.">
+  
+  <!-- Typography imports from Google Fonts CDN -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  
   <!-- D3.js v7 CDN -->
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  
   <style>
+    /* Reset and box model */
     *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
@@ -19,870 +23,876 @@
     }
 
     :root {
-      --bg-0: #05050D;       /* deepest background */
-      --bg-1: #0A0A18;       /* panel background */
-      --bg-2: #0F0F24;       /* card background */
-      --bg-3: #161630;       /* elevated card */
-      --border: #1E1E40;     /* subtle border */
-      --border-bright: #2E2E60; /* active border */
-      --purple: #7B6EF6;     /* primary accent */
-      --purple-dim: #3D3878;  /* muted purple */
-      --cyan: #00D4B4;        /* success / file nodes */
-      --cyan-dim: #004D42;
-      --amber: #F5A623;       /* warning / agent nodes */
-      --amber-dim: #4D3200;
-      --coral: #FF5E6C;       /* error / decay */
-      --coral-dim: #4D0E14;
-      --text-0: #F0F0FF;      /* primary text */
-      --text-1: #8080A0;      /* secondary text */
-      --text-2: #404060;      /* muted text */
-      --text-mono: #A0A8C8;   /* monospace content */
+      /* Backgrounds — very dark, warm-cool mix */
+      --bg-root:   #070709;   /* page root — deepest */
+      --bg-panel:  #0C0C10;   /* panel background */
+      --bg-card:   #111116;   /* card / row background */
+      --bg-raised: #17171E;   /* hover states, selected rows */
+
+      /* Borders — extremely subtle */
+      --border-dim:    #1C1C26;
+      --border-mid:    #26263A;
+      --border-bright: #35354E;
+
+      /* Accents — sharp, unexpected, non-generic */
+      --acid:    #C8F23C;   /* electric lime — primary accent. CTAs, active states, live dot */
+      --ice:     #7ECFFF;   /* cold blue — file nodes, links, secondary data */
+      --ember:   #FF8C42;   /* warm orange — agent nodes, warnings */
+      --rose:    #FF4E6A;   /* sharp red-pink — errors, decay, coral */
+      --sage:    #5ECFA8;   /* cool green — success, completed sessions */
+      --chalk:   #E8E8F0;   /* near-white — primary text */
+      --slate:   #7070A0;   /* mid-grey-blue — secondary text */
+      --dim:     #363650;   /* muted — purely decoration dots, lines */
+
+      /* Typography */
+      --font-mono: 'Syne Mono', monospace;
+      --font-display: 'Syne', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
     }
 
-    /* Custom thin scrollbars */
+    body, html {
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg-root);
+      color: var(--chalk);
+      font-family: var(--font-body);
+      font-weight: 300;
+      overflow: hidden;
+    }
+
+    /* Accessibility focus styling */
+    button:focus, select:focus, input:focus, [tabindex="0"]:focus {
+      outline: 1px solid var(--acid) !important;
+      outline-offset: 2px !important;
+    }
+
+    /* Custom scrollbars - 3px wide, sharp, barely visible */
     ::-webkit-scrollbar {
-      width: 4px;
-      height: 4px;
+      width: 3px;
+      height: 3px;
     }
     ::-webkit-scrollbar-track {
-      background: var(--bg-0);
+      background: var(--bg-panel);
     }
     ::-webkit-scrollbar-thumb {
       background: var(--border-bright);
+      border-radius: 0;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: var(--purple);
+      background: var(--slate);
     }
 
-    body {
-      background-color: var(--bg-0);
-      color: var(--text-0);
-      font-family: 'IBM Plex Sans', sans-serif;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
+    /* Staggered page reveal animations */
+    @keyframes revealUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
       height: 100vh;
       width: 100vw;
+      overflow: hidden;
     }
 
-    /* Staggered fadeIn animations */
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .left-panel {
-      opacity: 0;
-      animation: fadeIn 0.4s ease forwards;
-      animation-delay: 0s;
-    }
-
-    .graph-panel {
-      opacity: 0;
-      animation: fadeIn 0.4s ease forwards;
-      animation-delay: 150ms;
-    }
-
-    .memory-panel {
-      opacity: 0;
-      animation: fadeIn 0.4s ease forwards;
-      animation-delay: 300ms;
-    }
-
-    /* Responsive Tab Button bar for < 900px */
-    .responsive-tabs {
+    /* Mobile navigation tabs (hidden on desktop) */
+    .mobile-tabs {
       display: none;
     }
 
-    /* Main Grid Layout */
+    /* Main columns grid */
     .layout-grid {
       display: flex;
       flex-direction: row;
-      height: 100vh;
-      width: 100vw;
+      flex-grow: 1;
+      height: calc(100vh - 40px);
       overflow: hidden;
     }
 
-    /* Left Column (320px fixed) */
+    /* Columns vertical borders */
     .left-panel {
-      width: 320px;
-      min-width: 320px;
-      max-width: 320px;
-      background-color: var(--bg-1);
-      border-right: 1px solid var(--border);
+      width: 240px;
+      min-width: 240px;
+      max-width: 240px;
+      background-color: var(--bg-panel);
+      border-right: 1px solid var(--border-dim);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+      height: 100%;
+      animation: revealUp 0.4s ease forwards;
+      animation-delay: 0ms;
+      opacity: 0;
+    }
+
+    .graph-panel {
+      flex-grow: 1;
+      background-color: var(--bg-root);
+      position: relative;
       display: flex;
       flex-direction: column;
       height: 100%;
+      overflow: hidden;
+      animation: revealUp 0.4s ease forwards;
+      animation-delay: 80ms;
+      opacity: 0;
     }
 
-    .project-header-section {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
+    .memory-panel {
+      width: 300px;
+      min-width: 300px;
+      max-width: 300px;
+      background-color: var(--bg-panel);
+      border-left: 1px solid var(--border-dim);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+      animation: revealUp 0.4s ease forwards;
+      animation-delay: 160ms;
+      opacity: 0;
     }
 
-    .project-header-top {
+    .status-bar {
+      height: 40px;
+      min-height: 40px;
+      background-color: var(--bg-card);
+      border-top: 1px solid var(--border-dim);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      width: 100%;
+      box-sizing: border-box;
+      animation: revealUp 0.4s ease forwards;
+      animation-delay: 240ms;
+      opacity: 0;
+    }
+
+    /* Left column details */
+    .project-header-container {
+      padding: 12px 16px;
+    }
+
+    .project-top-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 2px;
     }
 
-    .brand {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 700;
-      font-size: 13px;
-      letter-spacing: 0.5px;
-      color: var(--text-0);
+    .brand-wordmark {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 20px;
+      color: var(--acid);
+      letter-spacing: -0.5px;
     }
 
-    .live-dot-container {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
+    .live-indicator {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--slate);
       display: flex;
       align-items: center;
-      gap: 6px;
-      color: var(--text-1);
+      gap: 4px;
     }
 
     .live-dot {
-      color: var(--text-2);
-      font-size: 10px;
-      transition: color 0.3s;
+      font-size: 9px;
+      color: var(--dim);
+      transition: color 0.2s ease;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 212, 180, 0.4); }
-      50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(0, 212, 180, 0); }
+    @keyframes pulseDot {
+      0% { opacity: 0.3; }
+      50% { opacity: 1; }
+      100% { opacity: 0.3; }
     }
 
     .live-dot.active {
-      color: var(--cyan);
-      animation: pulse 1.5s infinite;
-      text-shadow: 0 0 4px var(--cyan);
+      color: var(--acid);
+      animation: pulseDot 1.5s infinite;
     }
 
-    .live-dot.inactive {
-      color: var(--text-2);
-      animation: none;
-    }
-
-    .divider {
-      height: 1px;
-      background-color: var(--border);
+    .header-divider {
+      border: 0;
+      border-top: 1px solid var(--border-dim);
       margin: 8px 0;
     }
 
-    .project-dropdown-container {
+    .project-selector-wrapper {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      padding: 4px 0;
     }
 
-    .mono-label {
-      font-family: 'JetBrains Mono', monospace;
+    .selector-prefix {
+      font-family: var(--font-mono);
       font-size: 11px;
-      color: var(--text-1);
-      letter-spacing: 0.5px;
+      color: var(--acid);
     }
 
-    .brut-select {
+    .project-select {
       flex: 1;
-      background-color: var(--bg-0);
-      border: 1px solid var(--border);
-      color: var(--text-mono);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      padding: 5px 8px;
+      background: transparent;
+      border: none;
+      color: var(--chalk);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
       outline: none;
-      cursor: pointer;
-      border-radius: 0;
-      transition: border-color 0.2s;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      padding: 2px 0;
     }
 
-    .brut-select:focus {
-      border-color: var(--purple);
+    .project-select option {
+      background-color: var(--bg-panel);
+      color: var(--chalk);
     }
 
-    /* Health Strip */
-    .health-strip {
-      background-color: var(--bg-0);
-      border-bottom: 1px solid var(--border);
-      padding: 10px 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
-    }
-
-    .health-indicators {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .health-item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .health-label {
-      color: var(--text-1);
-    }
-
-    .health-dot {
-      font-size: 8px;
-      color: var(--text-2);
-    }
-
-    .health-val {
-      color: var(--text-mono);
-    }
-
-    .offline-banner {
-      color: var(--coral);
+    .panel-section-title {
+      font-family: var(--font-display);
       font-weight: 700;
-      text-align: center;
-      width: 100%;
-    }
-
-    /* Brief Panel */
-    .brief-panel-container {
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .panel-header {
-      background-color: var(--bg-0);
-      border-bottom: 1px solid var(--border);
-      padding: 8px 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text-1);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      letter-spacing: 0.5px;
-    }
-
-    .brief-toggle {
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .brief-toggle:hover {
-      color: var(--text-0);
-      background-color: var(--bg-2);
-    }
-
-    .toggle-icon {
-      color: var(--text-2);
-      font-size: 10px;
-    }
-
-    .brief-panel-content {
-      padding: 12px 16px;
-      max-height: 240px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      transition: max-height 0.2s ease-out;
-    }
-
-    .brief-panel-content.collapsed {
-      max-height: 150px;
-    }
-
-    .brief-lines {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .brief-header {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      font-weight: bold;
-      color: var(--purple);
-      margin-top: 6px;
-      margin-bottom: 2px;
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      color: var(--slate);
       text-transform: uppercase;
     }
 
-    .brief-text-line {
-      font-size: 12px;
-      color: var(--text-0);
-      line-height: 1.4;
-      white-space: pre-wrap;
+    .panel-divider {
+      border: 0;
+      border-top: 1px solid var(--border-dim);
+      margin: 8px 0;
     }
 
-    .expand-link {
-      font-family: 'JetBrains Mono', monospace;
+    /* SYSTEM stats section */
+    .system-panel {
+      padding: 12px 16px;
+    }
+
+    .system-row {
+      display: flex;
+      align-items: center;
+      margin: 5px 0;
+      height: 18px;
+    }
+
+    .status-dot {
+      font-size: 10px;
+      margin-right: 6px;
+      line-height: 1;
+    }
+
+    .status-dot.dot-ok {
+      color: var(--acid);
+    }
+
+    .status-dot.dot-warn {
+      color: var(--ember);
+    }
+
+    .status-dot.dot-error {
+      color: var(--rose);
+    }
+
+    .status-dot.dot-offline {
+      color: var(--dim);
+    }
+
+    .system-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--slate);
+      width: 60px;
+    }
+
+    .system-value {
+      font-family: var(--font-body);
       font-size: 11px;
-      color: var(--cyan);
-      text-decoration: none;
-      margin-top: 6px;
-      align-self: flex-start;
+      color: var(--chalk);
+      flex-grow: 1;
     }
 
-    .expand-link:hover {
-      color: var(--text-0);
+    .system-status {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-align: right;
+      color: var(--slate);
     }
 
-    /* Sessions Section */
-    .sessions-panel-container {
-      flex: 1;
+    /* SESSIONS list section */
+    .sessions-panel {
+      padding: 12px 16px;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      flex-grow: 1;
+      min-height: 180px;
     }
 
-    .sessions-list {
-      flex: 1;
+    .sessions-list-container {
       overflow-y: auto;
-      display: flex;
-      flex-direction: column;
+      flex-grow: 1;
+      max-height: 250px;
     }
 
     .session-row {
-      display: grid;
-      grid-template-columns: 12px 1fr 1fr 10px;
-      grid-column-gap: 8px;
-      align-items: center;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
+      padding: 8px;
+      margin-bottom: 6px;
+      background-color: var(--bg-card);
       border-left: 2px solid transparent;
+      border-radius: 2px;
       cursor: pointer;
-      font-size: 12px;
-      transition: background-color 0.15s, border-left-color 0.15s;
+      transition: background-color 100ms ease, border-left-color 100ms ease;
+      outline: none;
     }
 
-    .session-row:hover {
-      background-color: var(--bg-2);
+    .session-row:hover, .session-row.active {
+      background-color: var(--bg-raised);
     }
 
-    .session-row.active {
-      background-color: var(--bg-3);
-      border-left-color: var(--purple) !important;
-    }
-
-    .session-diamond {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
+    .session-top-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 2px;
     }
 
     .session-agent {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 500;
-      color: var(--text-0);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-family: var(--font-mono);
+      font-size: 11px;
     }
 
+    .session-agent.claude { color: var(--ice); }
+    .session-agent.gemini { color: var(--sage); }
+    .session-agent.copilot { color: var(--ember); }
+    .session-agent.codex { color: var(--acid); }
+    .session-agent.default { color: var(--chalk); }
+
     .session-feature {
-      color: var(--text-1);
+      font-family: var(--font-body);
+      font-size: 11px;
+      color: var(--chalk);
+      margin-left: 6px;
+      flex-grow: 1;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .session-time {
-      color: var(--text-2);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
-      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--slate);
     }
 
-    .session-status {
-      display: none; /* hidden in table list but styled */
+    .session-bottom-line {
+      font-family: var(--font-mono);
+      font-size: 9px;
     }
+
+    .session-status.completed { color: var(--sage); }
+    .session-status.in-progress { color: var(--ember); }
+    .session-status.failed { color: var(--rose); }
 
     /* Left border agent hover states */
-    .session-row.agent-claude {
-      border-left-color: var(--purple-dim);
-    }
-    .session-row.agent-claude:hover {
-      border-left-color: var(--purple);
+    .session-row.claude { border-left-color: var(--ice); }
+    .session-row.gemini { border-left-color: var(--sage); }
+    .session-row.copilot { border-left-color: var(--ember); }
+    .session-row.codex { border-left-color: var(--acid); }
+    .session-row.default { border-left-color: var(--chalk); }
+
+    /* DAILY BRIEF panel */
+    .brief-panel {
+      padding: 12px 16px;
     }
 
-    .session-row.agent-gemini {
-      border-left-color: var(--cyan-dim);
-    }
-    .session-row.agent-gemini:hover {
-      border-left-color: var(--cyan);
-    }
-
-    .session-row.agent-copilot {
-      border-left-color: #1a2a5a;
-    }
-    .session-row.agent-copilot:hover {
-      border-left-color: #3b82f6;
-    }
-
-    .session-row.agent-default {
-      border-left-color: var(--amber-dim);
-    }
-    .session-row.agent-default:hover {
-      border-left-color: var(--amber);
-    }
-
-    /* Right Area Stack */
-    .right-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background-color: var(--bg-0);
-    }
-
-    /* Graph Panel (60% height) */
-    .graph-panel {
-      height: 60%;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      position: relative;
-    }
-
-    .graph-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .brut-select-sm {
-      background-color: var(--bg-1);
-      border: 1px solid var(--border);
-      color: var(--text-mono);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      padding: 2px 6px;
-      outline: none;
-      cursor: pointer;
-      border-radius: 0;
-    }
-
-    .nodes-count {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      color: var(--text-2);
-    }
-
-    .brut-btn-sm {
-      background-color: var(--bg-1);
-      border: 1px solid var(--border);
-      color: var(--text-1);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      padding: 2px 8px;
-      cursor: pointer;
-      border-radius: 0;
-      transition: background-color 0.15s, color 0.15s;
-    }
-
-    .brut-btn-sm:hover {
-      background-color: var(--bg-2);
-      color: var(--text-0);
-      border-color: var(--border-bright);
-    }
-
-    .brut-btn-sm:active {
-      background-color: var(--purple-dim);
-    }
-
-    .graph-canvas-container {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-      width: 100%;
-      height: 100%;
-    }
-
-    #graphSvg {
-      width: 100%;
-      height: 100%;
-      background-color: var(--bg-0);
-      display: block;
-    }
-
-    .graph-empty {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    .empty-title {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text-2);
-      letter-spacing: 1px;
-      margin-bottom: 6px;
-    }
-
-    .empty-subtitle {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      color: var(--text-2);
-    }
-
-    .empty-subtitle code {
-      background-color: var(--bg-1);
-      padding: 2px 4px;
-      border: 1px solid var(--border);
-    }
-
-    /* Node Detail Popup */
-    .node-detail-popup {
-      position: absolute;
-      bottom: 12px;
-      right: 12px;
-      width: 280px;
-      max-height: 250px;
-      background-color: var(--bg-1);
-      border: 1px solid var(--border-bright);
-      display: flex;
-      flex-direction: column;
-      z-index: 10;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-    }
-
-    .popup-header {
+    .brief-title-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background-color: var(--bg-2);
-      padding: 6px 12px;
-      border-bottom: 1px solid var(--border);
+      width: 100%;
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      color: inherit;
+      outline: none;
     }
 
-    .popup-title {
-      font-family: 'JetBrains Mono', monospace;
+    .brief-toggle-icon {
       font-size: 11px;
+      color: var(--slate);
+      transition: transform 0.2s ease;
+    }
+
+    .brief-content {
+      font-family: var(--font-body);
+      font-weight: 300;
+      font-size: 11px;
+      color: var(--slate);
+      line-height: 1.7;
+      overflow: hidden;
+      transition: max-height 0.2s ease-out;
+      max-height: 0; /* collapsed by default */
+    }
+
+    .brief-content.expanded {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .brief-header {
+      font-family: var(--font-display);
       font-weight: 700;
-      color: var(--text-0);
+      font-size: 10px;
+      color: var(--chalk);
+      margin-top: 10px;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .brief-text-line {
+      margin-bottom: 4px;
+    }
+
+    /* Center Graph Panel */
+    #graphSvg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .coordinate-readout {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--slate);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .graph-toolbar {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      gap: 6px;
+      z-index: 10;
+    }
+
+    .toolbar-select, .toolbar-badge, .toolbar-btn {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--slate);
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-mid);
+      border-radius: 2px;
+      padding: 4px 8px;
+      height: 22px;
+      line-height: 12px;
+      cursor: pointer;
+      box-sizing: border-box;
+      transition: border-color 0.1s ease, color 0.1s ease;
+      outline: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+    }
+
+    .toolbar-badge {
+      cursor: default;
+      user-select: none;
+    }
+
+    .toolbar-btn:hover, .toolbar-select:hover {
+      border-color: var(--border-bright);
+      color: var(--chalk);
+    }
+
+    /* Node detail sliding panel overlay */
+    .node-detail-slider {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 220px;
+      height: 100%;
+      background-color: var(--bg-panel);
+      border-left: 2px solid var(--border-bright);
+      z-index: 20;
+      padding: 16px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .node-detail-slider.expanded {
+      transform: translateX(0);
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .slider-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--chalk);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: 210px;
+      max-width: 170px;
     }
 
-    .popup-close {
+    .slider-close-btn {
       background: transparent;
       border: none;
-      color: var(--text-2);
+      color: var(--slate);
+      font-size: 16px;
       cursor: pointer;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
+      padding: 0;
       line-height: 1;
-    }
-
-    .popup-close:hover {
-      color: var(--coral);
-    }
-
-    .popup-body {
-      padding: 10px;
-      overflow-y: auto;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .popup-meta {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .brut-badge {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 9px;
-      font-weight: bold;
-      padding: 1px 5px;
-      text-transform: uppercase;
-    }
-
-    .popup-stat {
-      font-size: 11px;
-      color: var(--text-1);
-    }
-
-    .popup-memories-header {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 9px;
-      color: var(--purple);
-      letter-spacing: 0.5px;
-      margin-top: 4px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 2px;
-    }
-
-    .popup-memories-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .popup-memory-item {
-      font-size: 11px;
-      color: var(--text-mono);
-      line-height: 1.4;
-      border-bottom: 1px dashed var(--border);
-      padding-bottom: 4px;
-    }
-
-    .popup-memory-item:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
-    }
-
-    /* Memory Panel (40% height) */
-    .memory-panel {
-      height: 40%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .memory-search-container {
-      display: flex;
-      align-items: center;
-      flex: 1;
-      max-width: 320px;
-      margin: 0 16px;
-    }
-
-    .brut-input-search {
-      background-color: var(--bg-0);
-      border: 1px solid var(--border);
-      color: var(--text-mono);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      padding: 3px 8px;
-      width: 100%;
       outline: none;
-      transition: border-color 0.2s, background-color 0.2s;
     }
 
-    .brut-input-search:focus {
-      border-color: var(--purple);
-      background-color: var(--bg-2);
+    .slider-close-btn:hover {
+      color: var(--rose);
     }
 
-    .total-memories-count {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      color: var(--text-2);
-      margin-left: auto;
+    .slider-meta-table {
+      margin: 8px 0 16px 0;
     }
 
-    .memory-stream-container {
-      flex: 1;
+    .slider-meta-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 4px 0;
+      font-family: var(--font-mono);
+      font-size: 10px;
+    }
+
+    .slider-memories {
+      flex-grow: 1;
       overflow-y: auto;
-      padding: 12px 16px;
-      background-color: var(--bg-0);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+      font-family: var(--font-body);
+      font-size: 11px;
+      color: var(--slate);
+      line-height: 1.5;
+      margin-top: 8px;
     }
 
-    /* Memory Card Style */
-    .mem-card {
-      background-color: var(--bg-2);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--border);
-      padding: 10px 12px;
-      cursor: pointer;
+    .slider-memory-item {
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed var(--border-dim);
+    }
+
+    .slider-memory-item:last-child {
+      border-bottom: none;
+    }
+
+    /* Graph empty state centered screen */
+    .graph-empty-state {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      transition: background-color 0.15s, border-color 0.15s;
+      align-items: center;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .empty-large-icon {
+      font-family: var(--font-display);
+      font-size: 48px;
+      color: var(--border-bright);
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+
+    .empty-heading {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--slate);
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+
+    .empty-code {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--slate);
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      padding: 8px 12px;
+      text-align: left;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+
+    /* Right column details */
+    .search-container {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-dim);
+      background: transparent;
+      transition: border-bottom-color 0.2s ease;
+    }
+
+    .search-container:focus-within {
+      border-bottom-color: var(--acid);
+    }
+
+    .search-icon {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--slate);
+      margin-right: 8px;
+    }
+
+    .search-container input {
+      flex: 1;
+      border: none;
+      background: none;
+      outline: none;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--chalk);
+    }
+
+    .search-container input::placeholder {
+      color: var(--slate);
+    }
+
+    .mem-count {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--slate);
+      margin-left: 8px;
+    }
+
+    .memory-stream-list {
+      flex-grow: 1;
+      overflow-y: auto;
+    }
+
+    /* Memory card ledger-style (separated by line, transparent by default) */
+    .mem-card {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-dim);
+      background-color: transparent;
+      cursor: pointer;
+      transition: background-color 150ms ease;
+      outline: none;
     }
 
     .mem-card:hover {
-      background-color: var(--bg-3);
-      border-color: var(--border-bright);
+      background-color: var(--bg-raised);
     }
 
     .mem-card-meta {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
-      color: var(--text-1);
-    }
-
-    .source-badge {
+      gap: 6px;
+      font-family: var(--font-mono);
       font-size: 9px;
-      padding: 1px 5px;
-      background-color: var(--purple-dim);
-      color: var(--purple);
+      flex-wrap: wrap;
     }
 
-    .agent-badge {
-      font-size: 11px;
-      color: var(--text-2);
+    .memory-agent {
+      color: var(--ember);
     }
 
-    .time-badge {
-      color: var(--text-2);
+    .memory-time {
+      color: var(--slate);
       margin-left: auto;
     }
 
-    .decay-bar-label {
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .score-label {
-      color: var(--text-mono);
-    }
-
     .mem-card-content {
+      font-family: var(--font-body);
+      font-weight: 300;
       font-size: 12px;
-      line-height: 1.5;
-      color: var(--text-0);
-      word-break: break-word;
-      white-space: pre-wrap;
+      color: var(--chalk);
+      line-height: 1.6;
       display: -webkit-box;
       -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      margin-top: 6px;
+      margin-bottom: 6px;
     }
 
     .mem-card.expanded .mem-card-content {
       display: block;
-      overflow: visible;
       -webkit-line-clamp: unset;
     }
 
-    /* SSE ▶ NEW indicator styles */
-    @keyframes newTextFade {
-      0% { color: var(--purple); opacity: 1; }
-      100% { color: transparent; opacity: 0; }
-    }
-
-    .new-text-indicator {
-      font-family: 'JetBrains Mono', monospace;
+    .decay-bar-label {
+      font-family: var(--font-mono);
       font-size: 9px;
-      font-weight: 700;
-      color: var(--purple);
-      animation: newTextFade 1.5s ease-out forwards;
-    }
-
-    @keyframes newFlash {
-      0% { background-color: var(--purple-dim); }
-      100% { background-color: var(--bg-2); }
-    }
-
-    .new-flash-card {
-      animation: newFlash 1.5s ease-out forwards;
-    }
-
-    /* Helper styles for empty states and loading */
-    .empty-state {
+      margin-right: 4px;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
+      gap: 4px;
+    }
+
+    .mem-card-decay-details {
+      display: none;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--slate);
+      margin-top: 4px;
+    }
+
+    .mem-card.expanded .mem-card-decay-details {
+      display: block;
+    }
+
+    /* SSE New Card animations */
+    @keyframes newCardTransition {
+      from { background-color: var(--bg-raised); }
+      to   { background-color: transparent; }
+    }
+
+    .new-card-flash {
+      animation: newCardTransition 2s ease-out forwards;
+    }
+
+    @keyframes newTagFadeout {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
+
+    .new-tag {
+      font-family: var(--font-mono);
+      font-size: 8px;
+      color: var(--acid);
+      animation: newTagFadeout 3s ease-out forwards;
+      margin-right: 4px;
+      font-weight: bold;
+    }
+
+    /* Empty states */
+    .empty-text, .error-text {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--slate);
       text-align: center;
-      color: var(--text-2);
-      font-family: 'JetBrains Mono', monospace;
-      gap: 6px;
+      padding: 24px 16px;
     }
 
-    .empty-icon {
-      font-size: 20px;
+    .error-text {
+      color: var(--rose);
     }
 
-    .empty-text {
-      font-size: 11px;
+    /* Bottom status bar */
+    .status-left, .status-right {
+      display: flex;
+      aria-label: "Status metadata";
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--slate);
     }
 
-    .loading {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      color: var(--text-2);
-      padding: 16px;
-      text-align: center;
+    .status-separator {
+      color: var(--border-bright);
     }
 
-    /* D3 Canvas nodes and links */
+    .consolidate-btn {
+      background: transparent;
+      border: 1px solid var(--border-mid);
+      border-radius: 2px;
+      color: var(--slate);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      padding: 2px 6px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.1s ease, color 0.1s ease;
+    }
+
+    .consolidate-btn:hover {
+      color: var(--chalk);
+      border-color: var(--border-bright);
+    }
+
+    .consolidate-btn.active {
+      border-color: var(--acid) !important;
+    }
+
+    /* D3 Canvas nodes and links styling */
     .node-group circle {
-      transition: stroke-width 0.2s, stroke 0.2s;
+      stroke: none;
     }
 
-    /* Shared style utilities */
-    .type-file {
-      background-color: var(--cyan-dim) !important;
-      color: var(--cyan) !important;
-    }
-    .type-decision {
-      background-color: var(--purple-dim) !important;
-      color: var(--purple) !important;
-    }
-    .type-feature {
-      background-color: var(--amber-dim) !important;
-      color: var(--amber) !important;
-    }
-    .type-agent {
-      background-color: var(--coral-dim) !important;
-      color: var(--coral) !important;
+    .node-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      fill: var(--chalk);
+      text-anchor: middle;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
     }
 
-    /* RESPONSIVE SCALING (< 900px) */
-    @media (max-width: 899px) {
-      .responsive-tabs {
+    .node-group:hover .node-label {
+      opacity: 1 !important;
+    }
+
+    /* RESPONSIVE SCALING (< 860px) */
+    @media (max-width: 859px) {
+      .mobile-tabs {
         display: flex;
-        background-color: var(--bg-1);
-        border-bottom: 1px solid var(--border);
         height: 40px;
-        width: 100vw;
-        overflow: hidden;
+        background-color: var(--bg-panel);
+        border-bottom: 1px solid var(--border-dim);
+        width: 100%;
+        z-index: 15;
       }
 
-      .responsive-tab-btn {
+      .tab-btn {
         flex: 1;
         background: transparent;
         border: none;
         border-bottom: 2px solid transparent;
-        color: var(--text-1);
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 11px;
-        font-weight: 500;
+        color: var(--slate);
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 10px;
         cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background-color 0.2s, color 0.2s;
+        outline: none;
+        text-align: center;
+        line-height: 40px;
       }
 
-      .responsive-tab-btn.active {
-        border-bottom-color: var(--purple);
-        color: var(--text-0);
-        background-color: var(--bg-2);
+      .tab-btn.active {
+        color: var(--acid);
+        border-bottom-color: var(--acid);
+        background-color: var(--bg-card);
       }
 
       .layout-grid {
-        display: flex;
         flex-direction: column;
-        height: calc(100vh - 40px);
-        width: 100vw;
+        height: calc(100vh - 80px); /* 40px status bar + 40px mobile tabs */
       }
 
       .left-panel, .graph-panel, .memory-panel {
@@ -890,279 +900,373 @@
         width: 100% !important;
         max-width: 100% !important;
         height: 100% !important;
-        border-right: none;
-        border-bottom: none;
+        border: none !important;
       }
 
-      .left-panel.active, .graph-panel.active, .memory-panel.active {
+      /* Toggle visual representation in tabs on mobile */
+      .left-panel.active-brief,
+      .left-panel.active-sessions,
+      .graph-panel.active,
+      .memory-panel.active {
         display: flex !important;
+      }
+
+      /* Hide unused elements inside left-panel on mobile */
+      .left-panel.active-brief .project-header-container,
+      .left-panel.active-brief .system-panel,
+      .left-panel.active-brief .sessions-panel {
+        display: none !important;
+      }
+
+      .left-panel.active-brief .brief-panel {
+        display: block !important;
+        flex-grow: 1;
+      }
+
+      .left-panel.active-brief .brief-content {
+        max-height: unset; /* display full brief directly */
+      }
+
+      .left-panel.active-sessions .project-header-container,
+      .left-panel.active-sessions .system-panel,
+      .left-panel.active-sessions .brief-panel {
+        display: none !important;
+      }
+
+      .left-panel.active-sessions .sessions-panel {
+        display: flex !important;
+        flex-grow: 1;
+        height: 100%;
+      }
+    }
+
+    /* Accessibility reduced-motion media query */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
       }
     }
   </style>
 </head>
 <body>
 
-  <!-- Responsive Tab Bar for mobile layout -->
-  <div class="responsive-tabs">
-    <button class="responsive-tab-btn active" onclick="switchMobileTab('left')">◈ STATUS</button>
-    <button class="responsive-tab-btn" onclick="switchMobileTab('graph')">⬡ GRAPH</button>
-    <button class="responsive-tab-btn" onclick="switchMobileTab('memory')">⚡ STREAM</button>
-  </div>
+  <div class="app-container">
+    <!-- Mobile Tabs (Visible only < 860px) -->
+    <nav class="mobile-tabs" aria-label="Mobile Navigation">
+      <button id="tabBtnGraph" class="tab-btn active" onclick="switchTab('graph')">GRAPH</button>
+      <button id="tabBtnMemory" class="tab-btn" onclick="switchTab('memory')">MEMORY</button>
+      <button id="tabBtnSessions" class="tab-btn" onclick="switchTab('sessions')">SESSIONS</button>
+      <button id="tabBtnBrief" class="tab-btn" onclick="switchTab('brief')">BRIEF</button>
+    </nav>
 
-  <div class="layout-grid">
-    <!-- Left Column: status, health, brief, sessions -->
-    <div class="left-panel active" id="leftPanel">
-      <div class="project-header-section">
-        <div class="project-header-top">
-          <div class="brand">◈ CONTEXTWEAVE</div>
-          <div class="live-status">
-            <span class="live-dot inactive" id="liveDot">●</span> LIVE
+    <!-- Main Workspace columns grid -->
+    <main class="layout-grid">
+      
+      <!-- LEFT COLUMN -->
+      <aside class="left-panel" aria-label="Project Status and Sessions">
+        
+        <!-- Project header -->
+        <div class="project-header-container">
+          <div class="project-top-row">
+            <span class="brand-wordmark">CW</span>
+            <span class="live-indicator"><span class="live-dot" id="liveDot">●</span> <span id="liveText">LIVE</span></span>
           </div>
+          <hr class="header-divider">
+          <div class="project-selector-wrapper">
+            <span class="selector-prefix">▸</span>
+            <select id="projectSelect" class="project-select" aria-label="Select active project">
+              <option value="">my-saas-app</option>
+            </select>
+          </div>
+          <hr class="header-divider">
         </div>
-        <div class="project-dropdown-container">
-          <span class="mono-label">PROJECT</span>
-          <select id="projectSelect" class="brut-select">
-            <option value="">— select project —</option>
-          </select>
-        </div>
-      </div>
 
-      <!-- Health Strip -->
-      <div class="health-strip" id="healthStrip">
-        <div class="offline-banner" id="offlineBanner" style="display: none;">API OFFLINE</div>
-        <div class="health-indicators" id="healthIndicators">
-          <div class="health-item">
-            <span class="health-label">DB</span>
-            <span class="health-dot" id="dotDB">●</span>
-            <span class="health-val" id="valDB">0.0MB</span>
+        <!-- Health SYSTEM panel -->
+        <section class="system-panel" aria-label="System status metrics">
+          <div class="panel-section-title">SYSTEM</div>
+          <hr class="panel-divider">
+          
+          <div class="system-row">
+            <span class="status-dot dot-offline" id="sysDotDB" role="status" aria-label="DB: offline">○</span>
+            <span class="system-label">DB</span>
+            <span class="system-value" id="sysValDB">—</span>
+            <span class="system-status" id="sysStatusDB">offline</span>
           </div>
-          <div class="health-item">
-            <span class="health-label">MEM</span>
-            <span class="health-dot" id="dotMEM">●</span>
-            <span class="health-val" id="valMEM">0</span>
+          
+          <div class="system-row">
+            <span class="status-dot dot-offline" id="sysDotMem" role="status" aria-label="MEMORY: offline">○</span>
+            <span class="system-label">MEMORY</span>
+            <span class="system-value" id="sysValMem">—</span>
+            <span class="system-status" id="sysStatusMem">offline</span>
           </div>
-          <div class="health-item">
-            <span class="health-label">MCP</span>
-            <span class="health-dot" id="dotMCP">○</span>
-            <span class="health-val" id="valMCP">offline</span>
+          
+          <div class="system-row">
+            <span class="status-dot dot-offline" id="sysDotMCP" role="status" aria-label="MCP: offline">○</span>
+            <span class="system-label">MCP</span>
+            <span class="system-value" id="sysValMCP">—</span>
+            <span class="system-status" id="sysStatusMCP">offline</span>
           </div>
-          <div class="health-item">
-            <span class="health-label">EMB</span>
-            <span class="health-dot" id="dotEMB">●</span>
-            <span class="health-val" id="valEMB">ready</span>
+          
+          <div class="system-row">
+            <span class="status-dot dot-offline" id="sysDotEmbed" role="status" aria-label="EMBED: offline">○</span>
+            <span class="system-label">EMBED</span>
+            <span class="system-value" id="sysValEmbed">MiniLM-L6</span>
+            <span class="system-status" id="sysStatusEmbed">offline</span>
           </div>
-        </div>
-      </div>
+          
+          <hr class="panel-divider">
+        </section>
 
-      <!-- Daily Brief -->
-      <div class="brief-panel-container">
-        <div class="panel-header brief-toggle" id="briefToggle">
-          <span>DAILY BRIEF</span>
-          <span class="toggle-icon" id="briefToggleIcon">[▲]</span>
-        </div>
-        <div class="brief-panel-content" id="briefContent">
-          <div class="brief-lines" id="briefLines">
-            <div class="empty-text">Select a project to load daily brief</div>
-          </div>
-          <a href="#" class="expand-link" id="briefExpandBtn" style="display: none;">[expand]</a>
-        </div>
-      </div>
-
-      <!-- Sessions List -->
-      <div class="sessions-panel-container">
-        <div class="panel-header">SESSIONS</div>
-        <div class="sessions-list" id="sessionsList">
-          <div class="empty-state">
-            <div class="empty-icon">◆</div>
+        <!-- SESSIONS list -->
+        <section class="sessions-panel" aria-label="Recent active sessions">
+          <div class="panel-section-title">SESSIONS</div>
+          <hr class="panel-divider">
+          <div class="sessions-list-container" id="sessionsList">
             <div class="empty-text">Select a project to load sessions</div>
           </div>
-        </div>
-      </div>
-    </div>
+        </section>
 
-    <!-- Right Column: Graph and Memories -->
-    <div class="right-area">
-      <!-- Graph Panel (60%) -->
-      <div class="graph-panel" id="graphPanel">
-        <div class="panel-header">
-          <span>KNOWLEDGE GRAPH</span>
-          <div class="graph-toolbar">
-            <select id="graphFilter" class="brut-select-sm">
-              <option value="all">all</option>
-              <option value="file">files</option>
-              <option value="decision">decisions</option>
-              <option value="feature">features</option>
-              <option value="agent">agents</option>
-            </select>
-            <span class="nodes-count" id="nodesCount">● 0 nodes</span>
-            <button class="brut-btn-sm" id="btnReset" title="Reset Zoom">Reset</button>
-            <button class="brut-btn-sm" id="btnFit" title="Fit to screen">Fit</button>
+        <!-- Collapsible DAILY BRIEF -->
+        <section class="brief-panel" aria-label="Project daily briefing">
+          <button class="brief-title-bar" id="briefTitleBtn" aria-expanded="false" aria-controls="briefContent" onclick="toggleBriefPanel()">
+            <span class="panel-section-title">DAILY BRIEF</span>
+            <span class="brief-toggle-icon" id="briefToggleIcon">▾</span>
+          </button>
+          <hr class="panel-divider">
+          <div class="brief-content" id="briefContent" role="region">
+            <div class="empty-text">Select a project to load brief</div>
           </div>
+          <hr class="panel-divider" id="briefBottomDivider" style="display: none;">
+        </section>
+
+      </aside>
+
+      <!-- CENTER COLUMN: STAR CHART GRAPH -->
+      <section class="graph-panel active" id="graphSection" aria-label="Interactive entity relationship graph">
+        <!-- Coordinate HUD display -->
+        <div class="coordinate-readout" id="coordReadout">x: 0  y: 0  zoom: 1.0×</div>
+        
+        <!-- Graph toolbar controls -->
+        <div class="graph-toolbar">
+          <select id="graphFilter" class="toolbar-select" aria-label="Filter graph nodes by category">
+            <option value="all">ALL ▾</option>
+            <option value="file">FILES</option>
+            <option value="decision">DECISIONS</option>
+            <option value="feature">FEATURES</option>
+            <option value="agent">AGENTS</option>
+          </select>
+          <div class="toolbar-badge" id="nodesCountBadge">[0]</div>
+          <button class="toolbar-btn" id="btnFit" onclick="fitZoom()">FIT</button>
+          <button class="toolbar-btn" id="btnReset" onclick="resetZoom()">RESET</button>
         </div>
 
-        <div class="graph-canvas-container">
-          <svg id="graphSvg"></svg>
-          <div class="graph-empty" id="graphEmpty">
-            <div class="empty-title">NO ENTITIES TRACKED YET</div>
-            <div class="empty-subtitle">Run: <code>contextweave observe my-project "your first observation"</code></div>
+        <!-- Node detail sliding popup -->
+        <div class="node-detail-slider" id="nodeDetailSlider">
+          <div class="slider-header">
+            <span class="slider-title" id="sliderTitle">src/auth/login.ts</span>
+            <button class="slider-close-btn" id="sliderCloseBtn" onclick="closeNodeDetailSlider()">×</button>
           </div>
-
-          <!-- Node Detail Popup (Bottom Right) -->
-          <div class="node-detail-popup" id="nodeDetailPopup" style="display: none;">
-            <div class="popup-header">
-              <span class="popup-title" id="popupTitle">src/auth.ts</span>
-              <button class="popup-close" id="popupCloseBtn">[×</button>
+          <hr class="panel-divider">
+          <div class="slider-meta-table">
+            <div class="slider-meta-row">
+              <span class="meta-label">TYPE</span>
+              <span class="meta-value" id="sliderType">file</span>
             </div>
-            <div class="popup-body">
-              <div class="popup-meta">
-                <span class="brut-badge" id="popupTypeBadge">file</span>
-                <span class="popup-stat" id="popupObsCount">Mentions: 0</span>
-              </div>
-              <div class="popup-memories-header">RELATED MEMORIES</div>
-              <div class="popup-memories-list" id="popupMemoriesList">
-                <div class="empty-text">No related memories found</div>
-              </div>
+            <div class="slider-meta-row">
+              <span class="meta-label">SEEN</span>
+              <span class="meta-value" id="sliderSeen">0 times</span>
+            </div>
+            <div class="slider-meta-row">
+              <span class="meta-label">LAST</span>
+              <span class="meta-value" id="sliderLast">—</span>
             </div>
           </div>
+          <div class="panel-section-title">RELATED MEMORIES</div>
+          <hr class="panel-divider">
+          <div class="slider-memories" id="sliderMemories">
+            <!-- related list -->
+          </div>
         </div>
-      </div>
 
-      <!-- Memory Stream Panel (40%) -->
-      <div class="memory-panel" id="memoryPanel">
-        <div class="panel-header">
-          <span>MEMORY STREAM</span>
-          <div class="memory-search-container">
-            <input type="text" id="memorySearch" placeholder="search________________________" class="brut-input-search">
-          </div>
-          <span class="total-memories-count" id="totalMemoriesCount">● 0 total</span>
+        <!-- Graph canvas empty state & SVG -->
+        <div class="graph-empty-state" id="graphEmptyState">
+          <div class="empty-large-icon">○</div>
+          <div class="empty-heading">NO ENTITIES TRACKED</div>
+          <pre class="empty-code">contextweave observe my-project
+"your first observation"</pre>
         </div>
-        <div class="memory-stream-container" id="memoryStream">
-          <div class="empty-state">
-            <div class="empty-icon">◆</div>
-            <div class="empty-text">Select a project to load memories</div>
-          </div>
+        <svg id="graphSvg"></svg>
+      </section>
+
+      <!-- RIGHT COLUMN: MEMORYSTREAM -->
+      <section class="memory-panel" id="memorySection" aria-label="Chronological memory observation stream">
+        <div class="search-container">
+          <span class="search-icon">⌕</span>
+          <input type="text" id="memorySearch" placeholder="search memories_____________" aria-label="Search memories" role="searchbox">
+          <span id="memoriesCount" class="mem-count">0</span>
         </div>
+        <div class="memory-stream-list" id="memoryStream" role="region" aria-live="polite">
+          <div class="empty-text">Select a project to load memories</div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- BOTTOM STATUS BAR -->
+    <footer class="status-bar" id="statusBar">
+      <div class="status-left">
+        <span>ContextWeave v0.1.0</span>
+        <span class="status-separator">─</span>
+        <span id="statusProject">my-saas-app</span>
+        <span class="status-separator">─</span>
+        <span id="statusMemories">0 memories</span>
+        <span class="status-separator">─</span>
+        <span id="statusSessions">0 sessions</span>
+        <span class="status-separator">─</span>
+        <span id="statusNodes">0 nodes</span>
       </div>
-    </div>
+      <div class="status-right">
+        <span id="statusSync">Last sync: 0s ago</span>
+        <span class="status-separator">─</span>
+        <button class="consolidate-btn" id="consolidateBtn">[CONSOLIDATE]</button>
+      </div>
+    </footer>
+
   </div>
 
   <script>
-    // ─── State Variables ───
+    // ─── App Global State Variables ───
     let currentProject = '';
     let rawGraphData = { nodes: [], links: [] };
     let activeGraphFilter = 'all';
     let allSessions = [];
     let activeSessionFilter = null;
     let lastMemoriesData = [];
-    let isBriefExpanded = false;
-    let fullBriefLines = [];
-    let isBriefCollapsedInUI = false;
-
+    
     let simulation = null;
     let zoomBehavior = null;
+    let selectedNodeId = null;
 
     let streamSource = null;
     let sseReconnectTimeout = null;
     let sseDelay = 1000;
-
+    let sseReconnectAttempts = 0;
+    
     let searchDebounceTimeout = null;
+    let lastSyncSeconds = 0;
 
-    // ─── Escape HTML helper ───
+    // ─── Escape HTML utility to prevent injection ───
     function escHtml(str) {
       if (!str) return '';
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return str.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
     }
 
-    // ─── Human-readable timeAgo helper ───
+    // ─── Human readable timeAgo helper ───
     function timeAgo(iso) {
       if (!iso) return 'unknown';
-      // Append Z to represent UTC if not present
       const d = new Date(iso + (iso.endsWith('Z') || iso.includes('+') ? '' : 'Z'));
       const s = Math.floor((Date.now() - d) / 1000);
-      if (s < 0) return 'just now';
-      if (s < 5) return 'just now';
-      if (s < 60) return `${s} seconds ago`;
+      if (s < 0) return 'now';
+      if (s < 5) return 'now';
+      if (s < 60) return `${s}s ago`;
       if (s < 3600) {
         const m = Math.floor(s / 60);
-        return m === 1 ? '1 minute ago' : `${m} minutes ago`;
+        return `${m}m ago`;
       }
       if (s < 86400) {
         const h = Math.floor(s / 3600);
-        return h === 1 ? '1 hour ago' : `${h} hours ago`;
+        return `${h}h ago`;
       }
       const dCount = Math.floor(s / 86400);
-      return dCount === 1 ? '1 day ago' : `${dCount} days ago`;
+      return `${dCount}d ago`;
     }
 
-    // ─── Color mappings ───
+    // ─── Color mapping helpers ───
     function getNodeColor(type) {
       switch (type) {
-        case 'file': return 'var(--cyan)';
-        case 'decision': return 'var(--purple)';
-        case 'feature': return 'var(--amber)';
-        case 'agent': return 'var(--coral)';
-        default: return 'var(--text-1)';
+        case 'file': return 'var(--ice)';
+        case 'decision': return 'var(--acid)';
+        case 'feature': return 'var(--sage)';
+        case 'agent': return 'var(--ember)';
+        default: return 'var(--slate)';
       }
     }
 
-    function getAgentColor(agentName) {
+    function getAgentColorClass(agentName) {
       const name = (agentName || '').toLowerCase();
-      if (name.includes('claude')) return 'var(--purple)';
-      if (name.includes('gemini')) return 'var(--cyan)';
-      if (name.includes('copilot')) return '#3b82f6';
-      return 'var(--amber)';
+      if (name.includes('claude')) return 'claude';
+      if (name.includes('gemini')) return 'gemini';
+      if (name.includes('copilot')) return 'copilot';
+      if (name.includes('codex')) return 'codex';
+      return 'default';
     }
 
-    function getAgentClass(agentName) {
-      const name = (agentName || '').toLowerCase();
-      if (name.includes('claude')) return 'agent-claude';
-      if (name.includes('gemini')) return 'agent-gemini';
-      if (name.includes('copilot')) return 'agent-copilot';
-      return 'agent-default';
+    function getSourceColor(source) {
+      const src = (source || '').toLowerCase();
+      if (src.includes('hook')) return 'var(--acid)';
+      if (src.includes('cli')) return 'var(--ice)';
+      if (src.includes('mcp')) return 'var(--sage)';
+      return 'var(--slate)';
     }
 
-    // ─── Mobile View tab switching ───
-    function switchMobileTab(tab) {
-      document.querySelectorAll('.responsive-tab-btn').forEach(btn => btn.classList.remove('active'));
-      document.getElementById('leftPanel').classList.remove('active');
-      document.getElementById('graphPanel').classList.remove('active');
-      document.getElementById('memoryPanel').classList.remove('active');
+    // ─── Responsive Mobile Switcher ───
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      const leftPanel = document.querySelector('.left-panel');
+      const graphSection = document.getElementById('graphSection');
+      const memorySection = document.getElementById('memorySection');
 
-      if (tab === 'left') {
-        document.querySelector('[onclick="switchMobileTab(\'left\')"]').classList.add('active');
-        document.getElementById('leftPanel').classList.add('active');
-      } else if (tab === 'graph') {
-        document.querySelector('[onclick="switchMobileTab(\'graph\')"]').classList.add('active');
-        document.getElementById('graphPanel').classList.add('active');
+      // Clear layout active classes
+      leftPanel.className = 'left-panel';
+      graphSection.classList.remove('active');
+      memorySection.classList.remove('active');
+
+      if (tabId === 'graph') {
+        document.getElementById('tabBtnGraph').classList.add('active');
+        graphSection.classList.add('active');
         setTimeout(fitZoom, 100);
-      } else if (tab === 'memory') {
-        document.querySelector('[onclick="switchMobileTab(\'memory\')"]').classList.add('active');
-        document.getElementById('memoryPanel').classList.add('active');
+      } else if (tabId === 'memory') {
+        document.getElementById('tabBtnMemory').classList.add('active');
+        memorySection.classList.add('active');
+      } else if (tabId === 'sessions') {
+        document.getElementById('tabBtnSessions').classList.add('active');
+        leftPanel.className = 'left-panel active-sessions';
+      } else if (tabId === 'brief') {
+        document.getElementById('tabBtnBrief').classList.add('active');
+        leftPanel.className = 'left-panel active-brief';
       }
     }
 
-    // ─── Health check polling & dropdown populate ───
+    // ─── Health / Status Polling ───
     async function pollHealth() {
       try {
         const response = await fetch('/api/status');
+        if (!response.ok) throw new Error(`status response status ${response.status}`);
         const data = await response.json();
 
-        // online status
-        document.getElementById('offlineBanner').style.display = 'none';
-        document.getElementById('healthIndicators').style.display = 'flex';
+        // Update DB stats
+        document.getElementById('sysDotDB').className = 'status-dot dot-ok';
+        document.getElementById('sysStatusDB').textContent = 'ok';
+        document.getElementById('sysValDB').textContent = `${data.db_size_mb.toFixed(1)} MB`;
 
-        // Update DB
-        document.getElementById('dotDB').style.color = 'var(--cyan)';
-        document.getElementById('valDB').textContent = `${data.db_size_mb.toFixed(1)}MB`;
+        // Update MEM stats
+        document.getElementById('sysDotMem').className = 'status-dot dot-ok';
+        document.getElementById('sysStatusMem').textContent = 'ok';
+        document.getElementById('sysValMem').textContent = `${data.total_memories} items`;
 
-        // Update MEM
-        document.getElementById('dotMEM').style.color = 'var(--cyan)';
-        document.getElementById('valMEM').textContent = data.total_memories;
-        document.getElementById('totalMemoriesCount').textContent = `● ${data.total_memories} total`;
+        // Update bottom status bar
+        document.getElementById('statusMemories').textContent = `${data.total_memories} memories`;
 
-        // Update projects dropdown if it only has the placeholder
+        // Populate projects dropdown
         const select = document.getElementById('projectSelect');
-        if (select.children.length <= 1) {
+        const prevSelected = select.value;
+
+        if (select.children.length <= 1 || data.projects.length !== select.children.length - 1) {
           select.innerHTML = '<option value="">— select project —</option>';
           data.projects.forEach(p => {
             const opt = document.createElement('option');
@@ -1170,25 +1274,32 @@
             opt.textContent = p;
             select.appendChild(opt);
           });
-          if (currentProject) {
-            select.value = currentProject;
+          
+          if (prevSelected && data.projects.includes(prevSelected)) {
+            select.value = prevSelected;
           } else if (data.projects.length > 0) {
             select.value = data.projects[0];
             onProjectChange(data.projects[0]);
           }
         }
 
-        // EMB dot always green if connected
-        document.getElementById('dotEMB').style.color = 'var(--cyan)';
-        document.getElementById('valEMB').textContent = 'ready';
+        // EMBED is ready if API is reachable
+        document.getElementById('sysDotEmbed').className = 'status-dot dot-ok';
+        document.getElementById('sysStatusEmbed').textContent = 'ready';
 
       } catch (err) {
-        // Handle API offline
-        document.getElementById('offlineBanner').style.display = 'block';
-        document.getElementById('healthIndicators').style.display = 'none';
-        document.getElementById('liveDot').className = 'live-dot inactive';
-        document.getElementById('dotMCP').style.color = 'var(--text-2)';
-        document.getElementById('valMCP').textContent = 'offline';
+        console.error("Health poll failed:", err);
+        // Show system offline state
+        document.getElementById('sysDotDB').className = 'status-dot dot-offline';
+        document.getElementById('sysStatusDB').textContent = 'offline';
+        document.getElementById('sysDotMem').className = 'status-dot dot-offline';
+        document.getElementById('sysStatusMem').textContent = 'offline';
+        document.getElementById('sysDotEmbed').className = 'status-dot dot-offline';
+        document.getElementById('sysStatusEmbed').textContent = 'offline';
+        
+        document.getElementById('liveDot').classList.remove('active');
+        document.getElementById('liveDot').style.color = 'var(--dim)';
+        document.getElementById('liveText').textContent = 'OFFLINE';
       }
     }
 
@@ -1198,12 +1309,13 @@
       if (!slug) return;
 
       activeSessionFilter = null;
-
-      // Show temporary loading indicator in containers
-      document.getElementById('briefLines').innerHTML = '<div class="loading">Loading brief...</div>';
-      document.getElementById('sessionsList').innerHTML = '<div class="loading">Loading sessions...</div>';
-      document.getElementById('memoryStream').innerHTML = '<div class="loading">Loading memories...</div>';
-      document.getElementById('nodeDetailPopup').style.display = 'none';
+      document.getElementById('statusProject').textContent = slug;
+      
+      // Reset details panel and scroll lists
+      closeNodeDetailSlider();
+      document.getElementById('briefContent').innerHTML = '<div class="empty-text">Loading brief...</div>';
+      document.getElementById('sessionsList').innerHTML = '<div class="empty-text">Loading sessions...</div>';
+      document.getElementById('memoryStream').innerHTML = '<div class="empty-text">Loading memories...</div>';
 
       try {
         await Promise.all([
@@ -1214,7 +1326,7 @@
         ]);
         startSSEStream();
       } catch (err) {
-        // silent catch
+        console.error("Failed loading project datasets:", err);
       }
     }
 
@@ -1222,112 +1334,106 @@
       onProjectChange(e.target.value);
     });
 
-    // ─── Daily Brief panel logic ───
+    // ─── Collapsible Daily Brief panel ───
     async function loadBrief() {
       if (!currentProject) return;
       try {
         const response = await fetch(`/api/brief?project=${encodeURIComponent(currentProject)}`);
+        if (!response.ok) throw new Error(`brief API failed: status ${response.status}`);
         const data = await response.json();
+        
+        const container = document.getElementById('briefContent');
         if (data.brief) {
-          fullBriefLines = data.brief.split('\n');
-          renderBrief();
+          const lines = data.brief.split('\n');
+          container.innerHTML = '';
+          
+          lines.forEach(line => {
+            const trimmed = line.trim();
+            if (!trimmed && line !== '') return;
+            const div = document.createElement('div');
+            
+            // Basic markdown headers parsing
+            if (trimmed.startsWith('#') || trimmed.startsWith('##') || trimmed.startsWith('###')) {
+              div.className = 'brief-header';
+              div.textContent = trimmed.replace(/^#+\s+/, '');
+            } else {
+              div.className = 'brief-text-line';
+              div.textContent = line;
+            }
+            container.appendChild(div);
+          });
         } else {
-          document.getElementById('briefLines').innerHTML = '<div class="empty-text">No brief available</div>';
-          document.getElementById('briefExpandBtn').style.display = 'none';
+          container.innerHTML = '<div class="empty-text">No brief available</div>';
         }
       } catch (err) {
-        document.getElementById('briefLines').innerHTML = '<div class="empty-text">Error loading brief</div>';
-        document.getElementById('briefExpandBtn').style.display = 'none';
+        document.getElementById('briefContent').innerHTML = `<div class="error-text">API ERROR — /api/brief returned 500</div>`;
       }
     }
 
-    function renderBrief() {
-      const container = document.getElementById('briefLines');
-      container.innerHTML = '';
-
-      if (isBriefCollapsedInUI) {
-        container.innerHTML = '<div class="empty-text">Daily brief hidden</div>';
-        document.getElementById('briefExpandBtn').style.display = 'none';
-        return;
-      }
-
-      const displayLimit = isBriefExpanded ? fullBriefLines.length : 8;
-      const linesToShow = fullBriefLines.slice(0, displayLimit);
-
-      linesToShow.forEach(line => {
-        const trimmed = line.trim();
-        if (!trimmed && line !== '') return; // skip empty lines to save vertical space
-        const div = document.createElement('div');
-        if (trimmed.startsWith('#') || trimmed.startsWith('##') || trimmed.startsWith('###')) {
-          div.className = 'brief-header';
-          div.textContent = trimmed.replace(/^#+\s+/, '');
-        } else {
-          div.className = 'brief-text-line';
-          div.textContent = line;
-        }
-        container.appendChild(div);
-      });
-
-      const expandBtn = document.getElementById('briefExpandBtn');
-      if (fullBriefLines.length > 8) {
-        expandBtn.style.display = 'inline-block';
-        expandBtn.textContent = isBriefExpanded ? '[collapse]' : '[expand]';
-      } else {
-        expandBtn.style.display = 'none';
-      }
-    }
-
-    document.getElementById('briefExpandBtn').addEventListener('click', (e) => {
-      e.preventDefault();
-      isBriefExpanded = !isBriefExpanded;
-      renderBrief();
-    });
-
-    document.getElementById('briefToggle').addEventListener('click', () => {
-      isBriefCollapsedInUI = !isBriefCollapsedInUI;
+    function toggleBriefPanel() {
       const content = document.getElementById('briefContent');
       const icon = document.getElementById('briefToggleIcon');
-      if (isBriefCollapsedInUI) {
-        content.style.display = 'none';
-        icon.textContent = '[▼]';
-      } else {
-        content.style.display = 'flex';
-        icon.textContent = '[▲]';
-        renderBrief();
-      }
-    });
+      const divider = document.getElementById('briefBottomDivider');
+      const btn = document.getElementById('briefTitleBtn');
 
-    // ─── Sessions list logic ───
+      const isExpanded = content.classList.contains('expanded');
+      if (isExpanded) {
+        content.classList.remove('expanded');
+        btn.setAttribute('aria-expanded', 'false');
+        icon.style.transform = 'rotate(0deg)';
+        divider.style.display = 'none';
+      } else {
+        content.classList.add('expanded');
+        btn.setAttribute('aria-expanded', 'true');
+        icon.style.transform = 'rotate(180deg)';
+        divider.style.display = 'block';
+      }
+    }
+
+    // ─── Sessions listing logic ───
     async function loadSessions() {
       if (!currentProject) return;
       try {
         const response = await fetch(`/api/sessions?project=${encodeURIComponent(currentProject)}`);
+        if (!response.ok) throw new Error(`sessions API status ${response.status}`);
         allSessions = await response.json();
         renderSessions();
       } catch (err) {
-        document.getElementById('sessionsList').innerHTML = '<div class="empty-text">Error loading sessions</div>';
+        document.getElementById('sessionsList').innerHTML = `<div class="error-text">API ERROR — /api/sessions returned 500</div>`;
       }
     }
 
     function renderSessions() {
       const container = document.getElementById('sessionsList');
+      // Update status bar total
+      document.getElementById('statusSessions').textContent = `${allSessions.length} sessions`;
+
       if (!allSessions || !allSessions.length) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">◆</div><div class="empty-text">NO SESSIONS YET</div></div>';
+        container.innerHTML = '<div class="empty-text">No sessions recorded yet</div>';
         return;
       }
 
       container.innerHTML = allSessions.map(s => {
-        const agentColor = getAgentColor(s.agent);
-        const agentClass = getAgentClass(s.agent);
+        const agentClass = getAgentColorClass(s.agent);
         const activeClass = activeSessionFilter === s.id ? 'active' : '';
         const timeStr = timeAgo(s.started_at);
+        const statusClass = (s.status || 'in-progress').toLowerCase();
 
         return `
-          <div class="session-row ${agentClass} ${activeClass}" onclick="toggleSessionFilter(${s.id})">
-            <span class="session-diamond" style="color: ${agentColor};">◆</span>
-            <span class="session-agent">${escHtml(s.agent)}</span>
-            <span class="session-feature">${escHtml(s.feature || 'general')}</span>
-            <span class="session-time">${timeStr}</span>
+          <div class="session-row ${agentClass} ${activeClass}" 
+               role="button" 
+               tabindex="0" 
+               onclick="toggleSessionFilter(${s.id})"
+               onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); toggleSessionFilter(${s.id}); }"
+               aria-label="Session with ${escHtml(s.agent)} on ${escHtml(s.feature || 'general')}, status: ${statusClass}, started ${timeStr}">
+            <div class="session-top-line">
+              <span class="session-agent ${agentClass}">${escHtml(s.agent)}</span>
+              <span class="session-feature">${escHtml(s.feature || 'general')}</span>
+              <span class="session-time">${timeStr}</span>
+            </div>
+            <div class="session-bottom-line">
+              <span class="session-status ${statusClass}">${statusClass}</span>
+            </div>
           </div>
         `;
       }).join('');
@@ -1343,67 +1449,43 @@
       renderMemories(lastMemoriesData);
     }
 
-    // ─── Memory list & search logic ───
-    async function loadMemories() {
+    // ─── Memories listing & search logic ───
+    async function loadMemories(q = '') {
       if (!currentProject) return;
       try {
-        const r = await fetch(`/api/memories?project=${encodeURIComponent(currentProject)}&limit=50`);
-        lastMemoriesData = await r.json();
+        const url = q 
+          ? `/api/memories?project=${encodeURIComponent(currentProject)}&q=${encodeURIComponent(q)}&limit=50`
+          : `/api/memories?project=${encodeURIComponent(currentProject)}&limit=50`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`memories fetch status ${response.status}`);
+        lastMemoriesData = await response.json();
         renderMemories(lastMemoriesData);
       } catch (err) {
-        document.getElementById('memoryStream').innerHTML = '<div class="empty-text">Error loading memories</div>';
+        document.getElementById('memoryStream').innerHTML = `<div class="error-text">API ERROR — /api/memories returned 500</div>`;
       }
     }
 
-    async function performMemorySearch(query) {
-      if (!currentProject) return;
-      if (!query) {
-        loadMemories();
-        return;
-      }
-      try {
-        const r = await fetch(`/api/memories?project=${encodeURIComponent(currentProject)}&q=${encodeURIComponent(query)}&limit=50`);
-        lastMemoriesData = await r.json();
-        renderMemories(lastMemoriesData);
-      } catch (err) {
-        document.getElementById('memoryStream').innerHTML = '<div class="empty-text">Error searching memories</div>';
-      }
-    }
-
-    // Search debounce listener
-    document.getElementById('memorySearch').addEventListener('input', (e) => {
-      clearTimeout(searchDebounceTimeout);
-      const query = e.target.value.trim();
-      searchDebounceTimeout = setTimeout(() => {
-        performMemorySearch(query);
-      }, 300);
-    });
-
-    // Decay color HSL interpolation
-    function getDecayColor(score) {
-      const h = 171 + (355 - 171) * (1 - score);
-      const s = 100;
-      const l = 42 + (68 - 42) * (1 - score);
-      return `hsl(${h}, ${s}%, ${l}%)`;
-    }
-
-    function renderDecayBar(decayScore) {
-      const score = decayScore !== undefined ? decayScore : 1.0;
-      const filled = Math.max(0, Math.min(6, Math.round(score * 6)));
-      const empty = 6 - filled;
-      const barStr = "▓".repeat(filled) + "░".repeat(empty);
-      const color = getDecayColor(score);
-      return `<span style="color: ${color}">${barStr} ${score.toFixed(2)}</span>`;
+    function getDecayBarHtml(score) {
+      const numFilled = Math.max(0, Math.min(10, Math.round(score * 10)));
+      const numEmpty = 10 - numFilled;
+      return `<span class="decay-bar-blocks"><span style="color: var(--acid);">${'█'.repeat(numFilled)}</span><span style="color: var(--border-mid);">${'░'.repeat(numEmpty)}</span></span> <span style="color: var(--slate);">${score.toFixed(2)}</span>`;
     }
 
     function renderMemories(data) {
       const container = document.getElementById('memoryStream');
+      document.getElementById('memoriesCount').textContent = data.length;
+
       if (!data || !data.length) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">◆</div><div class="empty-text">NO MEMORIES YET</div></div>';
+        container.innerHTML = `
+          <div class="memory-empty-state">
+            <div class="empty-heading" style="font-family: var(--font-mono); font-size: 10px; color: var(--slate); margin-bottom: 8px;">NO MEMORIES YET</div>
+            <pre class="empty-code" style="font-family: var(--font-mono); font-size: 9px; color: var(--slate); background-color: var(--bg-card); border: 1px solid var(--border-dim); padding: 8px; line-height: 1.3;">contextweave observe my-project \\\n    "your first observation"</pre>
+          </div>
+        `;
         return;
       }
 
-      // Filter locally by session time/agent if filter active
+      // Local session filtering logic
       let filtered = data;
       if (activeSessionFilter !== null) {
         const session = allSessions.find(s => s.id === activeSessionFilter);
@@ -1421,93 +1503,117 @@
       }
 
       if (!filtered.length) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">◆</div><div class="empty-text">NO MEMORIES FOR THIS SESSION</div></div>';
+        container.innerHTML = '<div class="empty-text">No memories for this session</div>';
         return;
       }
 
       container.innerHTML = filtered.map(m => {
-        let sourceColor = 'var(--text-2)';
-        let src = (m.source || '').toLowerCase();
-        if (src.includes('hook')) sourceColor = 'var(--purple)';
-        else if (src.includes('cli')) sourceColor = 'var(--cyan)';
-        else if (src.includes('mcp')) sourceColor = 'var(--amber)';
-        else if (src.includes('import')) sourceColor = 'var(--coral)';
-
         const scoreVal = m.score !== undefined ? m.score : m.confidence;
-        const scoreHtml = scoreVal !== undefined ? `<span style="font-size: 11px; color: var(--text-mono)">${scoreVal.toFixed(2)}</span>` : '';
-        const decayHtml = m.decay_score !== undefined ? renderDecayBar(m.decay_score) : '';
+        const decayHtml = m.decay_score !== undefined ? getDecayBarHtml(m.decay_score) : '';
+        const scoreHtml = scoreVal !== undefined ? `<span style="color: var(--slate); font-size: 9px;">score: ${scoreVal.toFixed(2)}</span>` : '';
+        const sourceColor = getSourceColor(m.source);
 
         return `
-          <div class="mem-card" style="border-left-color: ${sourceColor};" onclick="this.classList.toggle('expanded')">
+          <div class="mem-card" 
+               role="article" 
+               tabindex="0"
+               onclick="this.classList.toggle('expanded')"
+               onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); this.classList.toggle('expanded'); }"
+               aria-label="Memory from ${escHtml(m.agent || 'system')}, ${timeAgo(m.created_at)}">
             <div class="mem-card-meta">
-              <span class="source-badge">${escHtml(m.source || 'system')}</span>
-              ${m.agent ? `<span class="agent-badge">${escHtml(m.agent)}</span>` : ''}
-              <span class="time-badge">${timeAgo(m.created_at)}</span>
-              ${decayHtml ? `<span class="decay-bar-label">${decayHtml}</span>` : ''}
-              ${scoreHtml ? `<span class="score-label">${scoreHtml}</span>` : ''}
+              <span class="memory-source" style="color: ${sourceColor};">${escHtml(m.source || 'system')}</span>
+              ${m.agent ? `<span class="memory-agent">${escHtml(m.agent)}</span>` : ''}
+              <span class="memory-time">${timeAgo(m.created_at)}</span>
             </div>
             <div class="mem-card-content">${escHtml(m.content)}</div>
+            ${decayHtml || scoreHtml ? `
+              <div class="decay-bar-label">
+                ${decayHtml}
+                ${scoreHtml}
+              </div>
+            ` : ''}
+            <div class="mem-card-decay-details">
+              Confidence Score: ${scoreVal !== undefined ? scoreVal.toFixed(4) : '—'} · Created: ${escHtml(m.created_at)}
+            </div>
           </div>
         `;
       }).join('');
     }
 
-    // Prepend new SSE card with animations
+    // Prepend SSE observation card with transition flash
     function prependMemoryCard(m) {
       const container = document.getElementById('memoryStream');
-
-      const empty = container.querySelector('.empty-state');
-      if (empty) {
+      
+      const emptyState = container.querySelector('.memory-empty-state');
+      if (emptyState) {
         container.innerHTML = '';
       }
 
-      let sourceColor = 'var(--text-2)';
-      let src = (m.source || '').toLowerCase();
-      if (src.includes('hook')) sourceColor = 'var(--purple)';
-      else if (src.includes('cli')) sourceColor = 'var(--cyan)';
-      else if (src.includes('mcp')) sourceColor = 'var(--amber)';
-      else if (src.includes('import')) sourceColor = 'var(--coral)';
-
       const scoreVal = m.score !== undefined ? m.score : m.confidence;
-      const scoreHtml = scoreVal !== undefined ? `<span style="font-size: 11px; color: var(--text-mono)">${scoreVal.toFixed(2)}</span>` : '';
-      const decayHtml = m.decay_score !== undefined ? renderDecayBar(m.decay_score) : '';
+      const decayHtml = m.decay_score !== undefined ? getDecayBarHtml(m.decay_score) : '';
+      const scoreHtml = scoreVal !== undefined ? `<span style="color: var(--slate); font-size: 9px;">score: ${scoreVal.toFixed(2)}</span>` : '';
+      const sourceColor = getSourceColor(m.source);
 
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = `
-        <div class="mem-card new-flash-card" style="border-left-color: ${sourceColor};" onclick="this.classList.toggle('expanded')">
+        <div class="mem-card new-card-flash" 
+             role="article" 
+             tabindex="0"
+             onclick="this.classList.toggle('expanded')"
+             onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); this.classList.toggle('expanded'); }"
+             aria-label="Memory from ${escHtml(m.agent || 'system')}, ${timeAgo(m.created_at)}">
           <div class="mem-card-meta">
-            <span class="new-text-indicator">▶ NEW</span>
-            <span class="source-badge">${escHtml(m.source || 'system')}</span>
-            ${m.agent ? `<span class="agent-badge">${escHtml(m.agent)}</span>` : ''}
-            <span class="time-badge">${timeAgo(m.created_at)}</span>
-            ${decayHtml ? `<span class="decay-bar-label">${decayHtml}</span>` : ''}
-            ${scoreHtml ? `<span class="score-label">${scoreHtml}</span>` : ''}
+            <span class="new-tag">NEW</span>
+            <span class="memory-source" style="color: ${sourceColor};">${escHtml(m.source || 'system')}</span>
+            ${m.agent ? `<span class="memory-agent">${escHtml(m.agent)}</span>` : ''}
+            <span class="memory-time">${timeAgo(m.created_at)}</span>
           </div>
           <div class="mem-card-content">${escHtml(m.content)}</div>
+          ${decayHtml || scoreHtml ? `
+            <div class="decay-bar-label">
+              ${decayHtml}
+              ${scoreHtml}
+            </div>
+          ` : ''}
+          <div class="mem-card-decay-details">
+            Confidence Score: ${scoreVal !== undefined ? scoreVal.toFixed(4) : '—'} · Created: ${escHtml(m.created_at)}
+          </div>
         </div>
       `;
 
       const card = tempDiv.firstElementChild;
       container.insertBefore(card, container.firstChild);
-
-      // Keep local dataset in sync
+      
+      // Update local storage representation
       lastMemoriesData.unshift(m);
+      document.getElementById('memoriesCount').textContent = lastMemoriesData.length;
     }
+
+    // Debounce search input listener
+    document.getElementById('memorySearch').addEventListener('input', (e) => {
+      clearTimeout(searchDebounceTimeout);
+      const query = e.target.value.trim();
+      searchDebounceTimeout = setTimeout(() => {
+        loadMemories(query);
+      }, 300);
+    });
 
     // ─── D3.js Force Directed Graph ───
     async function loadGraph() {
       if (!currentProject) return;
       try {
         const r = await fetch(`/api/graph?project=${encodeURIComponent(currentProject)}`);
+        if (!r.ok) throw new Error(`graph API failed status ${r.status}`);
         rawGraphData = await r.json();
         renderGraph();
       } catch (err) {
-        // silent catch
+        console.error("Load graph dataset failed:", err);
+        const emptyState = document.getElementById('graphEmptyState');
+        emptyState.style.display = 'flex';
+        emptyState.innerHTML = `<div class="error-text" style="color: var(--rose);">API ERROR — /api/graph returned 500</div>`;
       }
     }
 
-    document.getElementById('btnReset').addEventListener('click', resetZoom);
-    document.getElementById('btnFit').addEventListener('click', fitZoom);
     document.getElementById('graphFilter').addEventListener('change', (e) => {
       activeGraphFilter = e.target.value;
       renderGraph();
@@ -1517,58 +1623,85 @@
       const svg = d3.select('#graphSvg');
       svg.selectAll('*').remove();
 
-      const parent = document.getElementById('graphSvg').parentElement;
-      const width = parent.clientWidth || 800;
-      const height = parent.clientHeight || 500;
+      // Definitions & Dot grid pattern
+      const defs = svg.append('defs');
+      defs.append('pattern')
+        .attr('id', 'dotGrid')
+        .attr('width', 40)
+        .attr('height', 40)
+        .attr('patternUnits', 'userSpaceOnUse')
+        .append('circle')
+        .attr('cx', 2)
+        .attr('cy', 2)
+        .attr('r', 1)
+        .attr('fill', 'var(--border-dim)')
+        .attr('opacity', 0.6);
+
+      // Grid background rect
+      svg.append('rect')
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .attr('fill', 'url(#dotGrid)')
+        .style('pointer-events', 'all');
+
+      const width = document.getElementById('graphSvg').clientWidth || 800;
+      const height = document.getElementById('graphSvg').clientHeight || 500;
       svg.attr('width', width).attr('height', height);
 
-      let filteredNodes = rawGraphData.nodes;
+      let filteredNodes = rawGraphData.nodes || [];
       if (activeGraphFilter !== 'all') {
-        filteredNodes = rawGraphData.nodes.filter(n => n.type === activeGraphFilter);
+        filteredNodes = filteredNodes.filter(n => n.type === activeGraphFilter);
       }
 
       const nodeIds = new Set(filteredNodes.map(n => n.id));
-      const filteredLinks = rawGraphData.links.filter(l => {
+      const filteredLinks = (rawGraphData.links || []).filter(l => {
         const s = typeof l.source === 'object' ? l.source.id : l.source;
         const t = typeof l.target === 'object' ? l.target.id : l.target;
         return nodeIds.has(s) && nodeIds.has(t);
       });
 
-      document.getElementById('nodesCount').textContent = `● ${filteredNodes.length} nodes`;
+      // Update counters
+      document.getElementById('nodesCountBadge').textContent = `[${filteredNodes.length}]`;
+      document.getElementById('statusNodes').textContent = `${filteredNodes.length} nodes`;
 
-      const empty = document.getElementById('graphEmpty');
+      const empty = document.getElementById('graphEmptyState');
       if (!filteredNodes.length) {
         empty.style.display = 'flex';
+        empty.innerHTML = `
+          <div class="empty-large-icon">○</div>
+          <div class="empty-heading">NO ENTITIES TRACKED</div>
+          <pre class="empty-code">contextweave observe my-project
+"your first observation"</pre>
+        `;
         return;
       } else {
         empty.style.display = 'none';
       }
 
-      // Initial positions for spawn animation
+      // Initial positions for zoom spawning
       filteredNodes.forEach(n => {
-        n.x = width / 2;
-        n.y = height / 2;
+        if (n.x === undefined || n.y === undefined) {
+          n.x = width / 2;
+          n.y = height / 2;
+        }
       });
 
+      // Main container transformed by zoom
       const g = svg.append('g').attr('class', 'graph-container');
 
       zoomBehavior = d3.zoom()
         .scaleExtent([0.1, 8])
         .on('zoom', (event) => {
           g.attr('transform', event.transform);
-          const k = event.transform.k;
-          g.selectAll('.node-label').style('opacity', k > 1.5 ? 1 : 0);
+          const k = event.transform.k.toFixed(1);
+          const x = Math.round(event.transform.x);
+          const y = Math.round(event.transform.y);
+          document.getElementById('coordReadout').textContent = `x: ${x}  y: ${y}  zoom: ${k}×`;
+          g.selectAll('.node-label').style('opacity', event.transform.k > 1.8 ? 1 : 0);
         });
 
       svg.call(zoomBehavior);
-
-      // Double-click background to fit
       svg.on('dblclick.zoom', null);
-      svg.on('dblclick', (event) => {
-        if (event.target === svg.node()) {
-          fitZoom();
-        }
-      });
 
       // Render links
       const link = g.append('g')
@@ -1576,9 +1709,9 @@
         .data(filteredLinks)
         .enter()
         .append('line')
-        .style('stroke', 'var(--border)')
-        .style('stroke-opacity', 0.4)
-        .style('stroke-width', d => 0.5 + (d.weight || 1) * 0.3);
+        .style('stroke', 'var(--border-mid)')
+        .style('stroke-opacity', 0.5)
+        .style('stroke-width', d => 0.3 + (d.weight || 1) * 0.2);
 
       // Render nodes
       const node = g.append('g')
@@ -1587,87 +1720,98 @@
         .enter()
         .append('g')
         .attr('class', 'node-group')
+        .attr('role', 'button')
+        .attr('tabindex', '0')
+        .attr('aria-label', d => `${d.type}: ${d.label}, seen ${d.observation_count || 1} times`)
         .call(d3.drag()
           .on('start', dragstarted)
           .on('drag', dragged)
           .on('end', dragended));
 
-      // Draw circles with spawn animation
-      const circles = node.append('circle')
-        .attr('r', 0)
+      // Draw node circle (no stroke by default)
+      node.append('circle')
+        .attr('r', d => 4 + Math.sqrt(d.observation_count || 1) * 2.5)
         .style('fill', d => getNodeColor(d.type))
-        .style('stroke', 'var(--border-bright)')
-        .style('stroke-width', '1px')
-        .style('cursor', 'pointer');
+        .style('transition', 'filter 0.15s ease');
 
-      circles.transition()
-        .duration(600)
-        .attr('r', d => 5 + Math.sqrt(d.observation_count || 1) * 3);
-
-      // Draw labels
-      const labels = node.append('text')
+      // Draw labels (8px offset above node)
+      node.append('text')
         .attr('class', 'node-label')
-        .attr('dy', d => (5 + Math.sqrt(d.observation_count || 1) * 3) + 12)
-        .attr('text-anchor', 'middle')
-        .style('font-family', "'IBM Plex Sans', sans-serif")
-        .style('font-size', '10px')
-        .style('fill', 'var(--text-1)')
-        .style('pointer-events', 'none')
-        .style('opacity', 0)
+        .attr('y', d => -(4 + Math.sqrt(d.observation_count || 1) * 2.5) - 8)
         .text(d => d.label);
 
-      // Interactive hover highlights
+      // Interactive mouse hover highlights
       node.on('mouseenter', (event, d) => {
-        link.style('stroke', l => {
-          const s = typeof l.source === 'object' ? l.source.id : l.source;
-          const t = typeof l.target === 'object' ? l.target.id : l.target;
-          return (s === d.id || t === d.id) ? 'var(--purple)' : 'var(--border)';
-        }).style('stroke-opacity', l => {
-          const s = typeof l.source === 'object' ? l.source.id : l.source;
-          const t = typeof l.target === 'object' ? l.target.id : l.target;
-          return (s === d.id || t === d.id) ? 0.9 : 0.15;
-        });
-
         d3.select(event.currentTarget).select('circle')
-          .style('stroke', 'var(--text-0)')
-          .style('stroke-width', '2px');
-
-        d3.select(event.currentTarget).select('text')
+          .style('filter', 'brightness(1.3)');
+        d3.select(event.currentTarget).select('.node-label')
           .style('opacity', 1);
+
+        link.style('stroke-opacity', l => {
+          const s = typeof l.source === 'object' ? l.source.id : l.source;
+          const t = typeof l.target === 'object' ? l.target.id : l.target;
+          return (s === d.id || t === d.id) ? 1.0 : 0.15;
+        });
       }).on('mouseleave', (event, d) => {
-        link.style('stroke', 'var(--border)')
-          .style('stroke-opacity', 0.4);
-
         d3.select(event.currentTarget).select('circle')
-          .style('stroke', 'var(--border-bright)')
-          .style('stroke-width', '1px');
+          .style('filter', 'none');
+        
+        const transform = d3.zoomTransform(svg.node());
+        d3.select(event.currentTarget).select('.node-label')
+          .style('opacity', transform.k > 1.8 ? 1 : 0);
 
-        const k = d3.zoomTransform(svg.node()).k;
-        d3.select(event.currentTarget).select('text')
-          .style('opacity', k > 1.5 ? 1 : 0);
+        link.style('stroke-opacity', 0.5);
       });
 
-      // Right click context menu to unpin
-      node.on('contextmenu', (event, d) => {
-        event.preventDefault();
-        d.fx = null;
-        d.fy = null;
-        d3.select(event.currentTarget).select('circle')
-          .style('stroke-dasharray', 'none');
-        if (!event.active) simulation.alphaTarget(0.1).restart();
-      });
-
-      // Click to open node popup details
+      // Click callback
       node.on('click', (event, d) => {
-        showNodeDetailPopup(d);
+        event.stopPropagation();
+        selectedNodeId = d.id;
+
+        g.selectAll('.node-group circle')
+          .style('stroke', 'none')
+          .style('stroke-width', '0');
+
+        d3.select(event.currentTarget).select('circle')
+          .style('stroke', 'var(--acid)')
+          .style('stroke-width', '1.5px');
+
+        showNodeDetailSlider(d);
       });
 
-      // Simulation
+      // Keyboard callback
+      node.on('keydown', (event, d) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          selectedNodeId = d.id;
+
+          g.selectAll('.node-group circle')
+            .style('stroke', 'none')
+            .style('stroke-width', '0');
+
+          d3.select(event.currentTarget).select('circle')
+            .style('stroke', 'var(--acid)')
+            .style('stroke-width', '1.5px');
+
+          showNodeDetailSlider(d);
+        }
+      });
+
+      // Clear selection on background click
+      svg.on('click', () => {
+        selectedNodeId = null;
+        g.selectAll('.node-group circle')
+          .style('stroke', 'none')
+          .style('stroke-width', '0');
+        closeNodeDetailSlider();
+      });
+
+      // Force simulation settings
       simulation = d3.forceSimulation(filteredNodes)
         .force('link', d3.forceLink(filteredLinks).id(d => d.id).distance(100))
         .force('charge', d3.forceManyBody().strength(-150))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide(d => (5 + Math.sqrt(d.observation_count || 1) * 3) + 12))
+        .force('collision', d3.forceCollide(d => (4 + Math.sqrt(d.observation_count || 1) * 2.5) + 12))
         .on('tick', () => {
           link
             .attr('x1', d => d.source.x)
@@ -1692,8 +1836,8 @@
 
     function dragended(event, d) {
       if (!event.active) simulation.alphaTarget(0);
-      d3.select(this).select('circle')
-        .style('stroke-dasharray', '3,3'); // dashed outline when pinned
+      d.fx = null;
+      d.fy = null;
     }
 
     function resetZoom() {
@@ -1718,7 +1862,7 @@
       const midX = bounds.x + width / 2, midY = bounds.y + height / 2;
       if (width === 0 || height === 0) return;
 
-      const scale = 0.8 / Math.max(width / fullWidth, height / fullHeight);
+      const scale = Math.min(8, 0.8 / Math.max(width / fullWidth, height / fullHeight));
       const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
 
       svg.transition().duration(500).call(
@@ -1727,57 +1871,80 @@
       );
     }
 
-    // ─── Node Detail Popup logic ───
-    async function showNodeDetailPopup(d) {
-      const popup = document.getElementById('nodeDetailPopup');
-      popup.style.display = 'flex';
+    // ─── Node detail panel slider overlay actions ───
+    function showNodeDetailSlider(d) {
+      const slider = document.getElementById('nodeDetailSlider');
+      slider.classList.add('expanded');
+      slider.style.borderLeftColor = getNodeColor(d.type);
 
-      document.getElementById('popupTitle').textContent = d.label;
-      const badge = document.getElementById('popupTypeBadge');
-      badge.textContent = d.type;
-      badge.className = `brut-badge type-${d.type}`;
-      badge.style.backgroundColor = getBadgeBgColor(d.type);
-      badge.style.color = getNodeColor(d.type);
+      document.getElementById('sliderTitle').textContent = d.label;
+      document.getElementById('sliderType').textContent = d.type;
+      document.getElementById('sliderSeen').textContent = `${d.observation_count || 1} times`;
+      document.getElementById('sliderLast').textContent = 'loading...';
 
-      document.getElementById('popupObsCount').textContent = `Mentions: ${d.observation_count || 1}`;
+      const memList = document.getElementById('sliderMemories');
+      memList.innerHTML = '<div class="empty-text">Loading related memories...</div>';
 
-      const list = document.getElementById('popupMemoriesList');
-      list.innerHTML = '<div class="loading">Loading related...</div>';
+      fetch(`/api/memories?project=${encodeURIComponent(currentProject)}&q=${encodeURIComponent(d.label)}&limit=3`)
+        .then(res => res.json())
+        .then(memories => {
+          if (!memories || !memories.length) {
+            memList.innerHTML = '<div class="empty-text">No related memories found</div>';
+            document.getElementById('sliderLast').textContent = '—';
+          } else {
+            memList.innerHTML = memories.map(m => `
+              <div class="slider-memory-item">
+                ${escHtml(m.content)}
+              </div>
+            `).join('');
+
+            // Extract last timestamp from most recent related memory
+            const times = memories.map(m => new Date(m.created_at).getTime()).filter(t => !isNaN(t));
+            if (times.length > 0) {
+              const maxVal = Math.max(...times);
+              document.getElementById('sliderLast').textContent = timeAgo(new Date(maxVal).toISOString());
+            } else {
+              document.getElementById('sliderLast').textContent = '—';
+            }
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          memList.innerHTML = `<div class="error-text">API ERROR — /api/memories returned 500</div>`;
+          document.getElementById('sliderLast').textContent = 'error';
+        });
+    }
+
+    function closeNodeDetailSlider() {
+      document.getElementById('nodeDetailSlider').classList.remove('expanded');
+    }
+
+    // ─── Consolidate post trigger ───
+    const consolidateBtn = document.getElementById('consolidateBtn');
+    consolidateBtn.addEventListener('click', async () => {
+      consolidateBtn.classList.add('active');
+      setTimeout(() => {
+        consolidateBtn.classList.remove('active');
+      }, 2000);
 
       try {
-        const url = `/api/memories?project=${encodeURIComponent(currentProject)}&q=${encodeURIComponent(d.label)}&limit=3`;
-        const res = await fetch(url);
-        const memories = await res.json();
-
-        if (!memories || !memories.length) {
-          list.innerHTML = '<div class="empty-text">No related memories found</div>';
-        } else {
-          list.innerHTML = memories.map(m => `
-            <div class="popup-memory-item">
-              ${escHtml(m.content)}
-            </div>
-          `).join('');
-        }
+        const res = await fetch(`/api/consolidate?project=${encodeURIComponent(currentProject)}`, {
+          method: 'POST'
+        });
+        if (!res.ok) throw new Error(`consolidate response code: ${res.status}`);
+        
+        // Reload data feeds
+        pollHealth();
+        loadMemories();
+        loadSessions();
+        loadGraph();
       } catch (err) {
-        list.innerHTML = '<div class="empty-text">Error loading related memories</div>';
+        console.error("Consolidate call failed:", err);
+        document.getElementById('statusSync').innerHTML = `<span style="color: var(--rose);">CONSOLIDATE FAILED</span>`;
       }
-    }
-
-    document.getElementById('popupCloseBtn').addEventListener('click', () => {
-      document.getElementById('nodeDetailPopup').style.display = 'none';
     });
 
-    function getBadgeBgColor(type) {
-      switch (type) {
-        case 'file': return 'var(--cyan-dim)';
-        case 'decision': return 'var(--purple-dim)';
-        case 'feature': return 'var(--amber-dim)';
-        case 'agent': return 'var(--coral-dim)';
-        default: return 'var(--bg-3)';
-      }
-    }
-
-    // ─── SSE Streaming logic ───
+    // ─── SSE Live Stream logic ───
     function startSSEStream() {
       if (streamSource) {
         streamSource.close();
@@ -1788,31 +1955,54 @@
 
       streamSource.onopen = () => {
         sseDelay = 1000;
-        document.getElementById('liveDot').className = 'live-dot active';
-        document.getElementById('valMCP').textContent = 'ready';
-        document.getElementById('dotMCP').style.color = 'var(--cyan)';
+        sseReconnectAttempts = 0;
+        lastSyncSeconds = 0;
+        
+        document.getElementById('liveDot').classList.add('active');
+        document.getElementById('liveText').textContent = 'LIVE';
+
+        // Set status health items online
+        document.getElementById('sysDotMCP').className = 'status-dot dot-ok';
+        document.getElementById('sysStatusMCP').textContent = 'ready';
+        document.getElementById('sysValMCP').textContent = 'ready';
       };
 
       streamSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'connected') return;
+          if (data.type === 'connected') {
+            lastSyncSeconds = 0;
+            return;
+          }
 
-          // Prepend observations stream
+          lastSyncSeconds = 0;
           prependMemoryCard(data);
+
+          // Update other panels in real-time
+          loadGraph();
+          pollHealth();
         } catch (err) {
-          // silent
+          console.error("SSE parse error:", err);
         }
       };
 
       streamSource.onerror = () => {
-        document.getElementById('liveDot').className = 'live-dot inactive';
-        document.getElementById('valMCP').textContent = 'offline';
-        document.getElementById('dotMCP').style.color = 'var(--text-2)';
-
         streamSource.close();
+        document.getElementById('liveDot').classList.remove('active');
+        document.getElementById('liveText').textContent = 'RECONNECTING';
 
-        // Exponential backoff reconnect
+        document.getElementById('sysDotMCP').className = 'status-dot dot-offline';
+        document.getElementById('sysStatusMCP').textContent = 'offline';
+        document.getElementById('sysValMCP').textContent = '—';
+
+        sseReconnectAttempts++;
+        if (sseReconnectAttempts > 5) {
+          document.getElementById('liveText').textContent = 'OFFLINE';
+          document.getElementById('statusSync').textContent = 'STREAM OFFLINE';
+          console.warn("SSE stream offline after 5 reconnect attempts.");
+          return;
+        }
+
         clearTimeout(sseReconnectTimeout);
         sseReconnectTimeout = setTimeout(() => {
           sseDelay = Math.min(sseDelay * 2, 30000);
@@ -1824,6 +2014,17 @@
     // ─── Initialization ───
     async function init() {
       await pollHealth();
+      
+      // Update sync ticker timer
+      setInterval(() => {
+        lastSyncSeconds++;
+        const syncText = document.getElementById('statusSync');
+        if (syncText.textContent !== 'STREAM OFFLINE') {
+          syncText.textContent = `Last sync: ${lastSyncSeconds}s ago`;
+        }
+      }, 1000);
+
+      // Poll stats status check every 10 seconds
       setInterval(pollHealth, 10000);
     }
 

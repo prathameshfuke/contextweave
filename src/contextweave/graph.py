@@ -167,7 +167,7 @@ def build_graph_json(project_slug: str) -> Dict[str, Any]:
             ORDER BY weight DESC
             LIMIT 500
             """.format(ph=",".join("?" * len(node_ids))),
-            list(node_ids) + list(node_ids),
+            [project_id] + list(node_ids) + list(node_ids),
         ).fetchall() if node_ids else []
 
         links = [
