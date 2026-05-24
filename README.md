@@ -2,22 +2,28 @@
 
 # <img src="./assets/logo.png" width="48" height="48" alt="ContextWeave Logo"> ContextWeave: The Agentic Memory Layer
 
-> AI context persistence for multi-model developer workflows, anchored in an Obsidian vault and extended into the browser.
+> Persistent SQLite Memory & Brutalist Knowledge Graphs for AI Coding Agents.
 
-ContextWeave solves the "context window amnesia" problem when working with AI coding assistants. Instead of repeatedly explaining your project, architectural decisions, and current state to different agents (Claude, ChatGPT, Gemini), ContextWeave captures, compresses, and injects your project's context automatically using a local Obsidian vault as a long-term knowledge graph.
+ContextWeave solves the "context window amnesia" problem when working with AI coding assistants. Instead of repeatedly explaining your project, architectural decisions, and current state to different agents (Claude, ChatGPT, Gemini), ContextWeave captures, compresses, and injects your project's context automatically using a local SQLite database as a long-term knowledge graph.
 
 ---
 
 ## 1. Executive Summary
-Modern AI development is plagued by context fragmentation. Every new session with Claude, Gemini, or ChatGPT starts at zero knowledge. ContextWeave eliminates this "context tax" by treating memory as a structured knowledge graph stored in a local Obsidian vault.  
+Modern AI development is plagued by context fragmentation. Every new session with Claude, Gemini, or ChatGPT starts at zero knowledge. ContextWeave eliminates this "context tax" by treating memory as a structured knowledge graph stored in a local SQLite database and mirrored as standard Markdown files in your Obsidian vault.
 
-By automating the flow of information between web research, agent sessions, and architectural decisions, ContextWeave ensures that AI agents function as continuous collaborators rather than transient assistants.
+By automating the flow of information between tool uses, agent sessions, and architectural decisions, ContextWeave ensures that AI agents function as continuous collaborators rather than transient assistants.
 
-## 2. Market Landscape and Differentiation
-*   **Model-Agnosticism:** Works with any LLM via CLI or extension. Supports Claude Code, ChatGPT, Gemini Web, and more.
-*   **Workflow Integration:** Connects the browser (research), the terminal (execution), and Obsidian (knowledge).
-*   **Human-Readable Memory:** Every "memory" is a Markdown file you can read, edit, and link manually.
-*   **Agent Handoffs:** Explicit protocol for agents to leave instructions for the next agent, ensuring continuity in multi-step engineering tasks.
+---
+
+## 2. Key Features
+
+*   **SQLite Native Storage**: Long-term memory is managed locally at `~/.contextweave/cw.db` using SQLite WAL mode for maximum concurrency and ACID reliability. No heavy database servers or complex setups required.
+*   **Hybrid Search Engine**: Combined keyword search (FTS5 BM25) and fast local vector search (using `sqlite-vec` extension and cached `sentence-transformers` `all-MiniLM-L6-v2` embeddings) with a module-level cached lazy loader.
+*   **Clinical Brutalist Web Viewer**: Beautiful split-panel UI on port `:4222` with a D3 force-directed knowledge graph, memory stream search, SSE live stream feed, brief summaries, and sessions listing.
+*   **MCP Integration**: Fully documented standard stdio FastMCP server exposing 15 developer tools.
+*   **Claude Code Hooks**: Event-driven automation for tool uses. Pre/Post Tool use observation, automatic session start/close, failure capturing, and settings registration in `.claude/settings.json`.
+*   **Obsidian Vault Sync**: Real-time folder hierarchy sync (using `watch` command or manually via `export`) mapping projects, index pages, graphs, and daily briefs.
+*   **Local-first privacy**: Completely offline operations for search, indexing, and embeddings (Ollama optional for text summaries).
 
 ---
 
@@ -27,39 +33,40 @@ ContextWeave operates on a 4-layer architecture, connecting your local environme
 
 ```mermaid
 graph TD
-    subgraph Layer4[Layer 4: Browser Integration]
-        Clipper[ContextWeave Chrome Extension]
-        Summarizer[Project-Aware AI Summarizer]
+    subgraph Layer4[Layer 4: Web Viewer UI]
+        Viewer[FastAPI Server on :4222]
+        GraphView[D3.js Force-Directed Graph]
+        LiveStream[SSE Observation Live Stream]
     end
 
-    subgraph Layer3[Layer 3: Knowledge Graph]
+    subgraph Layer3[Layer 3: Knowledge Vault]
         Vault[(Obsidian Vault)]
-        Templates[Standardized Templates]
-        GraphView[Obsidian Graph UI]
-        RestAPI[Local REST API Server]
+        PROJECT[PROJECT.md Index]
+        GRAPH[GRAPH.md Summary]
+        BRIEF[Daily BRIEF-*.md]
     end
 
-    subgraph Layer2[Layer 2: Context Engine]
+    subgraph Layer2[Layer 2: Core Memory Layer]
         Engine[Python Library: contextweave]
-        subgraph Modules
-            ProjectMgr[Project Registry]
-            SessionLifecycle[Session Lifecycle]
-            SemanticSearch[Hybrid Vector Search]
-            HandoffProtocol[Agent Handoff Logic]
-        end
+        SQLite[(SQLite DB: cw.db)]
+        FTS5[FTS5 BM25 Search]
+        SqliteVec[sqlite-vec Embeddings]
+        GraphExtractor[Graph Entity Extraction]
+        HandoffProtocol[Agent Handoff Protocol]
     end
 
-    subgraph Layer1[Layer 1: Agent Adapters]
-        ClaudeAdapter[Claude Code Adapter]
-        GeminiAdapter[Gemini CLI Adapter]
-        GenericAdapter[OpenAI/Custom API Adapter]
+    subgraph Layer1[Layer 1: Agent & Editor Adapters]
+        ClaudeHooks[Claude Code Hook Scripts]
+        ClaudeSettings[.claude/settings.json]
+        CursorAdapter[CursorRules Adapter]
+        GeminiAdapter[Gemini System Prompt Adapter]
     end
 
-    Clipper -->|Markdown + Frontmatter| Vault
-    Vault <-->|REST API + FS| Engine
-    Engine <-->|Prompt Injection| Layer1
-    Layer1 -->|Session Logs| Engine
-    Engine -->|Updates| Vault
+    Viewer <-->|REST API / SSE| SQLite
+    Vault <-->|File System / REST API| Engine
+    Engine <-->|SQLite Operations| SQLite
+    Engine -->|Config Injection| Layer1
+    ClaudeHooks -->|Subprocess Invocations| Engine
 ```
 
 ### 3.1 Data Flow Visualization
@@ -70,120 +77,187 @@ graph TD
 
 ---
 
-## 4. Core Components
+## 4. Core v2 Components
 
-### 4.1 The Context Engine (`contextweave`)
-The heart of the system, written in Python, managing the lifecycle of project context.
-*   **`vault`**: A dual-access layer interface. It communicates via the Obsidian Local REST API for web-based tools and direct file system access for CLI performance.
-*   **`retrieval`**: Implements local vector search using `ChromaDB`. It embeds your notes using `all-MiniLM-L6-v2`, allowing agents to query your entire vault for relevant architectural patterns or previous decisions.
-*   **`session`**: Manages the "active" state of a project. It tracks which agent is working on which feature and ensures logs are saved with rich frontmatter.
+### 4.1 Hybrid Memory Layer (`db.py` & `memory.py`)
+The memory layer manages observations and consolidated memories:
+*   **`sqlite-vec` & `FTS5`**: Keeps keyword search and vector embeddings in sync inside SQLite.
+*   **Lazy Transformer Loading**: `sentence-transformers` models are loaded on-demand and cached in a module-level variable to minimize initialization latency.
+*   **Similarity-based Consolidation**: Dedupes duplicate observations and decays old memories using a localized cosine-similarity matrix, keeping the context block dense and relevant without invoking LLMs.
 
-### 4.2 The Handoff Protocol
-A first-class Markdown schema that captures the "baton" between sessions.
-*   **Task State:** Current progress and blockers.
-*   **Logic Patterns:** Established coding conventions for the current feature.
-*   **Next Steps:** Concrete instructions for the next agent to follow.
+### 4.2 Web Viewer (`viewer/app.py` & `index.html`)
+Redesigned with a raw **Brutalist Terminal Intelligence** theme (JetBrains Mono for monospaced data, IBM Plex Sans for prose).
+*   **Split-Panel Layout**: The screen displays a project status dashboard, daily brief, and sessions list on the left; a D3.js force-directed graph (60% height) and a live-updating memory stream (40% height) on the right.
+*   **SSE Stream**: Displays live agent actions and observes new memories instantly with custom `▶ NEW` CSS animations.
+*   **Node Detail Popup**: Clicking any D3 node displays details alongside the top 3 relevant memories retrieved using local vector query.
 
-### 4.3 Chrome Extension (The Web Clipper)
-A project-aware extension that bridges the gap between web research and your knowledge graph.
-*   **Capture & Compress:** Scrapes AI chat transcripts and uses local Ollama models to compress them into technical summaries.
-*   **Smart Clipping:** Uses Mozilla Readability and Turndown to save clean Markdown versions of docs, auto-tagged to your active project.
-*   **Banner Injection:** Detects when you open a new AI chat and offers a one-click "Inject Context" banner.
-
----
-
-## 5. Advanced Features
-
-### 5.1 Real-Time File Watcher
-Run `contextweave watch` to keep your vector database in sync. Every time you save a note in Obsidian or an AI agent writes a session log, ContextWeave auto-indexes the change within 2 seconds. No manual indexing required.
-
-### 5.2 Daily Brief Generator
-Every morning, run `contextweave brief` to get a summary of all AI activity across your projects from the last 24 hours. It highlights:
-- What features were touched.
-- Which agents performed the work.
-- **Open Questions** that require your human intervention.
-- The exact "Next Step" for your first session of the day.
-
-### 5.3 Context Diffs
-Curious what changed since you last worked on a feature? `contextweave diff` produces a summarized delta between the last two sessions, highlighting new decisions and newly modified files.
+### 4.3 Claude Code Hook Automation (`hooks.py`)
+Hooks run silently inside Claude Code shell commands:
+*   **Event Hooks**: Maps native event commands such as `SessionStart`, `PreToolUse`, `PostToolUse`, `PostToolFailure`, `SubagentStart`, `SubagentStop`, `Stop`, `SessionEnd`, and `PreCompact`.
+*   **Claude settings**: Configures hook scripts in `.claude/settings.json` mapping keys to arrays of command strings.
+*   **Graceful Execution**: Subprocess commands capture stdout/stderr and run inside try-except blocks, failing silently to avoid disrupting developer workflows.
 
 ---
 
-## 6. Installation & Setup
+## 5. Installation & Setup
 
-### 6.1 Prerequisites
-- **Python 3.11+**
-- **Ollama**: Install from [ollama.com](https://ollama.com). Run `ollama pull mistral`.
-- **Obsidian**: Install the [Local REST API plugin](https://github.com/coddingtonbear/obsidian-local-rest-api).
+### 5.1 Prerequisites
+*   **Python 3.11+**
+*   **uv** (recommended package installer)
+*   **Ollama** (optional, for LLM-based chat summaries)
 
-### 6.2 Quick Install
+### 5.2 Quick Setup
+Clone the repository and run the setup scripts:
+
 ```bash
+# Clone
 git clone https://github.com/your-username/contextweave.git
 cd contextweave
-./scripts/install.sh
+
+# Run bootstrap (installs dependencies via uv and registers project)
+./setup.sh      # on Linux/macOS
+# OR
+setup.bat       # on Windows
 ```
-The installer will check your environment, pull necessary models, and help you configure your vault path.
+
+Alternatively, install in editable mode:
+```bash
+pip install -e .
+```
 
 ---
 
-## 7. Workflow Quickstart
+## 6. Workflow Quickstart
 
-1.  **Check Health**: `contextweave doctor` (Ensure Ollama and Obsidian are reachable).
-2.  **Initialize**: `contextweave init my-project` (Creates the folder structure in Obsidian).
-3.  **Start Watching**: Open a terminal and run `contextweave watch my-project`.
-4.  **Work with AI**: 
-    - `contextweave session start my-project --agent claude --feature "auth-api"`
-    - `contextweave inject my-project --adapter claude`
-5.  **Research**: Use the Chrome Extension to clip relevant API docs into your vault.
-6.  **Handoff**: `contextweave session close my-project --summary "implemented JWT" --next "test with frontend"`
+1.  **Doctor Check**: Verify dependencies are installed and extensions load correctly:
+    ```bash
+    contextweave doctor
+    ```
+2.  **Initialize Project**: Initialize a project slug and optionally point to an Obsidian vault:
+    ```bash
+    contextweave init audit-project --vault ~/Documents/ObsidianVault
+    ```
+3.  **Start Watching**: Sync changes automatically from the database to your Obsidian vault in real-time:
+    ```bash
+    contextweave watch audit-project
+    ```
+4.  **Track Agent Work**:
+    *   Start session: `contextweave session start audit-project --agent claude --feature auth`
+    *   Record notes: `contextweave observe audit-project "decided to use PostgreSQL over SQLite for sessions"`
+    *   Close session: `contextweave session close audit-project --summary "completed login" --next "add refresh tokens"`
+5.  **Inject Configs**: Auto-inject active context into `CLAUDE.md`, `.cursorrules`, or custom prompts:
+    ```bash
+    contextweave inject audit-project --adapter all
+    ```
+6.  **Install Hooks**: Automatically index your development tool history:
+    ```bash
+    contextweave hooks install audit-project
+    ```
+7.  **Serve Graph Viewer**: Open a live D3 graph and memory timeline on port 4222:
+    ```bash
+    contextweave serve
+    ```
 
 ---
 
-## 8. CLI Command Reference
+## 7. CLI Command Reference
 
 | Command | Usage | Description |
 |---|---|---|
-| `init` | `contextweave init <slug>` | Scaffolds a new project in your vault. |
-| `status` | `contextweave status <slug>` | Dashboard showing last session, next steps, and health. |
-| `watch` | `contextweave watch [slug]` | Background process to auto-sync notes to vector DB. |
-| `brief` | `contextweave brief [--all]` | Generates a daily AI activity summary. |
-| `diff` | `contextweave diff <slug>` | Shows what changed between the last two sessions. |
-| `session start` | `contextweave session start <slug>` | Begins a new tracked session. |
-| `session close` | `contextweave session close <slug>` | Finalizes session and generates handoff notes. |
-| `inject` | `contextweave inject <slug>` | Injects context into agent system files (CLAUDE.md). |
-| `doctor` | `contextweave doctor` | Self-diagnostic tool for your environment. |
+| `init` | `contextweave init <slug> [--vault <path>]` | Scaffolds a new project. |
+| `status` | `contextweave status <slug>` | Dashboard showing sessions, memories, DB size, and health. |
+| `watch` | `contextweave watch <slug>` | Background daemon syncing SQLite DB changes to Obsidian. |
+| `brief` | `contextweave brief <slug>` | Formats a daily project status brief. |
+| `observe` | `contextweave observe <slug> <content>` | Records an observation in the memory layer. |
+| `search` | `contextweave search <slug> <query>` | Hybrid BM25 + Vector search query. |
+| `session start` | `contextweave session start <slug> --agent <name> --feature <feat>` | Begins tracking agent progress and displays previous handoffs. |
+| `session close` | `contextweave session close <slug> --summary <sum> --next <next>` | Concludes a session and generates handoff details. |
+| `handoff show` | `contextweave handoff show <slug>` | Displays the latest agent handoff notes. |
+| `inject` | `contextweave inject <slug> [--adapter <name>]` | Updates `CLAUDE.md`, `.cursorrules`, etc. with latest memories. |
+| `hooks install` | `contextweave hooks install <slug> [--all-agents]` | Installs script files in `.claude/hooks/` and updates settings. |
+| `consolidate` | `contextweave consolidate <slug>` | Deduplicates and decays memories, pruning orphan nodes. |
+| `export` | `contextweave export <slug>` | Exports current project memories directly to Obsidian. |
+| `graph` | `contextweave graph <slug> [--entity <name>]` | Renders a text-based ASCII knowledge graph dashboard. |
+| `import-claude`| `contextweave import-claude <slug>` | Imports history from `~/.claude/projects/` JSONL logs. |
+| `serve` | `contextweave serve [--port <port>]` | Starts the local FastAPI Brutalist terminal web viewer. |
+| `mcp` | `contextweave mcp` | Starts the stdio FastMCP server. |
+| `doctor` | `contextweave doctor` | Performs environment diagnostics. |
 
 ---
 
-## 9. Project Vault Structure
-ContextWeave maintains a clean, searchable hierarchy in your vault:
+## 8. Obsidian Vault Structure
+
+If a vault path is configured, memories are synced to the following folder structure:
 ```text
-vault/
-├── projects/
-│   └── [project-slug]/
-│       ├── PROJECT.md              # Project dashboard
-│       ├── context/
-│       │   └── in-progress.md      # Active state
-│       ├── sessions/               # All historical logs
-│       │   └── 2026-05-19-claude-auth.md
-│       ├── agents/                 # Handoff notes and diffs
-│       │   └── 2026-05-19-handoff.md
-│       └── web-captures/           # Clipped docs
-│           └── stripe-docs.md
+MyObsidianVault/
+└── projects/
+    └── audit-project/
+        ├── PROJECT.md          # Index containing wikilinks to all memories & recent sessions
+        ├── GRAPH.md            # Markdown summary listing top knowledge graph entities
+        ├── BRIEF-2026-05-22.md # Collated daily brief documents
+        └── memories/
+            ├── 1.md            # Individual memory documents with YAML metadata
+            ├── 2.md
+            └── 3.md
 ```
 
-## 10. Privacy & Cost
-ContextWeave is **local-first**.
-- **Zero API Costs**: Summarization, diffing, and embedding all run locally via Ollama and sentence-transformers.
-- **Data Sovereignty**: Your chat logs and research never leave your machine.
+---
+
+## 9. MCP Tool Interface
+
+Exposes 15 developer-oriented tools via the stdio protocol. Register in `~/.claude.json` or `.cursorrules`:
+
+```json
+{
+  "mcpServers": {
+    "contextweave": {
+      "command": "contextweave-mcp",
+      "env": {
+        "CONTEXTWEAVE_PROJECT": "audit-project"
+      }
+    }
+  }
+}
+```
+
+| Tool Name | Arguments | Description |
+|---|---|---|
+| `memory_observe` | `project`, `content`, `source`, `agent`, `tags` | Saves a new observation. |
+| `memory_search` | `project`, `query`, `top_k` | Searches SQLite with hybrid ranking. |
+| `memory_build_context`| `project`, `query`, `max_chars` | Generates text prompt containing memories and handoffs. |
+| `memory_save` | `project`, `content`, `confidence` | Explicitly records high-confidence memories. |
+| `memory_session_start`| `project`, `agent`, `feature` | Begins a session and gets session ID. |
+| `memory_session_close`| `project`, `session_id`, `summary`, `next_task` | Closes session and triggers decay sweep. |
+| `memory_sessions` | `project`, `limit` | Lists project sessions. |
+| `memory_handoff_read` | `project` | Returns the latest handoff text. |
+| `memory_inject` | `project`, `adapter` | Inject context files (`CLAUDE.md`, etc.). |
+| `memory_consolidate` | `project` | Triggers a cleanup sweep. |
+| `memory_status` | `project` | Returns statistics in JSON format. |
+| `memory_graph_query` | `project`, `entity`, `depth` | Queries knowledge graph nodes. |
+| `memory_export` | `project` | Exports memories to Obsidian. |
+| `memory_import_claude`| `project` | Imports JSONL files from Claude Code directory. |
+| `memory_brief` | `project` | Returns daily project brief. |
 
 ---
 
-## 11. Strategic Research Bibliography
-The design of ContextWeave is informed by the following research:
-1.  **Git Context Controller (GCC)** (arXiv 2508.00031): Applying COMMIT/BRANCH/MERGE concepts to agent memory.
-2.  **SAMEP Protocol** (arXiv 2507.10562): Standards for multi-agent memory sharing.
-3.  **Collaborative Memory** (arXiv 2505.18279): Tiered memory architectures (private vs. shared).
+## 10. agentmemory Comparison
+
+| Feature | `agentmemory` | `contextweave` |
+|---------|-------------|--------------|
+| **Core Storage** | JSON files on disk | SQLite database (ACID, WAL, FTS5) |
+| **Language** | Node.js / TypeScript | Python (ML ecosystem native) |
+| **Embeddings** | `@xenova/transformers` | `sentence-transformers` (cached loader) |
+| **Search Mechanics** | BM25 + Vector + Graph | Dual FTS5 (BM25) & Vector (`sqlite-vec`) |
+| **Handoffs** | Manual CLI injection | First-class lifecycle automation |
+| **Vault Syncing** | Simple file appends | Automated structure, indexes, & graphs |
+| **Web UI** | Basic viewer | D3 force graph & SSE Live terminal |
+
+---
+
+## 11. Bibliography
+*   **Git Context Controller (GCC)** (*arXiv:2508.00031*): Applying COMMIT/BRANCH/MERGE concepts to agent memory.
+*   **SAMEP Protocol** (*arXiv:2507.10562*): Standards for multi-agent memory sharing.
+*   **Collaborative Memory** (*arXiv:2505.18279*): Tiered memory architectures (private vs. shared).
 
 ---
 
